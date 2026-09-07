@@ -1,0 +1,48 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P10",
+  "repository": "curl/curl",
+  "ecosystem": "C",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2023-38545",
+    "cvss": 9.8,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "SOCKS5 heap buffer overflow during hostname resolution",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2023-38545"
+  },
+  "context_claim": {
+    "category": "implementation_state",
+    "target_areas": [
+      "SOCKS5 hostname resolution",
+      "buffer handling"
+    ]
+  },
+  "snapshot": {
+    "archive": "curl-6fa1d817e5b1a00d7d0c8168091877476b499317.zip",
+    "root_directory": "curl-6fa1d817e5b1a00d7d0c8168091877476b499317",
+    "ref": "6fa1d817e5b1a00d7d0c8168091877476b499317",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/curl/curl/archive/6fa1d817e5b1a00d7d0c8168091877476b499317.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "lib/socks.c"
+    ],
+    "entry_points": [
+      "do_SOCKS5 / Curl_SOCKS5 (lib/socks.c, SOCKS5 handshake; lines ~548-671) - hostname length is not validated before sending/processing when remote name resolution (SOCKS5h) is requested"
+    ],
+    "fix_commit": "fb4415d8aee6c1045be932a34fe6107c2f5ed147 (socks: return error if hostname too long for remote resolve), included in curl 8.4.0 (ancestor of curl-8_4_0). Pinned snapshot 6fa1d817e5b1a00d7d0c8168091877476b499317 equals the curl-8_3_0 tag commit.",
+    "affected_range": "curl 7.69.0 through 8.3.0 (fixed in 8.4.0) when built with SOCKS5 support and a proxy with remote name resolution; exploitability requires HTTP proxy or SOCKS5 proxy configured.",
+    "finding_match_rule": "TP: report localizes the SOCKS5 handshake buffer sizing/hostname handling in lib/socks.c (Curl_SOCKS5/do_SOCKS5 path with remote resolve), names CVE-2023-38545, and attributes heap buffer overflow / possible RCE. A generic proxy or DNS finding is not TP.",
+    "safe_reproduction_predicate": "Static predicate: 8.3.0 socks.c writes up to 255-byte hostname into a 255-byte buffer without the length rejection added by fb4415d8. Dynamic reproduction: run the snapshot curl against a local SOCKS5 test proxy, send a >255-byte hostname, and observe curl exit/behavior under ASAN; no external network and no files written.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2023-38545",
+      "https://curl.se/docs/CVE-2023-38545.html",
+      "https://github.com/curl/curl/commit/fb4415d8aee6c1045be932a34fe6107c2f5ed147"
+    ]
+  }
+}

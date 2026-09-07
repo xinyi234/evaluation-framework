@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Portable agent configuration",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "agent_id",
+    "scaffold",
+    "model",
+    "runtime_file",
+    "timeout_s"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "agent_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "scaffold": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runtime_file": {
+      "type": "string",
+      "const": "runtime.json"
+    },
+    "timeout_s": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "config_template": {
+      "type": "string"
+    },
+    "secret_injections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["environment_variable", "destination_json_path"],
+        "properties": {
+          "environment_variable": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "destination_json_path": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "artifact_policy": {
+      "type": "object",
+      "required": [
+        "prompt_snapshot",
+        "redacted_agent_config_snapshot",
+        "raw_session",
+        "trace",
+        "report",
+        "verdict"
+      ],
+      "properties": {
+        "prompt_snapshot": {
+          "type": "string"
+        },
+        "redacted_agent_config_snapshot": {
+          "type": "string"
+        },
+        "raw_session": {
+          "type": "string"
+        },
+        "trace": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

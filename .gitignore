@@ -1,0 +1,8 @@
+workspaces/*
+!workspaces/README.md
+runs/*
+!runs/README.md
+analysis/generated/
+.env
+*.local.json
+__pycache__/

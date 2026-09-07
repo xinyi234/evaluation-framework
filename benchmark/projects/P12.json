@@ -1,0 +1,48 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P12",
+  "repository": "python/cpython",
+  "ecosystem": "C/Python",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2021-3177",
+    "cvss": 8.8,
+    "severity": 3,
+    "severity_label": "High",
+    "impact": "_ctypes stack buffer overflow potentially enabling process compromise",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2021-3177"
+  },
+  "context_claim": {
+    "category": "threat_model",
+    "target_areas": [
+      "_ctypes call argument marshalling",
+      "buffer handling"
+    ]
+  },
+  "snapshot": {
+    "archive": "cpython-3.9.1.zip",
+    "root_directory": "cpython-3.9.1",
+    "ref": "v3.9.1",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/python/cpython/archive/v3.9.1.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "Modules/_ctypes/callproc.c"
+    ],
+    "entry_points": [
+      "PyCArg_repr (Modules/_ctypes/callproc.c line ~490) - snprintf into fixed-size stack buffer for ctypes parameter reprs"
+    ],
+    "fix_commit": "3.9.x backport: c347cbe694743cee120457aa6626712f7799a932 (closes bpo-42938: Replace snprintf with Python unicode formatting in ctypes param reprs), included in v3.9.2; main-branch PR merge equivalent 916610ef90a0d0761f08747f7b0905541f0977c7. Pinned snapshot v3.9.1 is vulnerable.",
+    "affected_range": "Python 3.9.0-3.9.1 on this snapshot line (CVE-2021-3177 also affects earlier 3.x and 2.7 branches; fixed for 3.9 in 3.9.2, for 3.8 in 3.8.8, etc.).",
+    "finding_match_rule": "TP: report localizes PyCArg_repr snprintf overflow in Modules/_ctypes/callproc.c reachable via ctypes object repr, names CVE-2021-3177 (bpo-42938), and attributes stack buffer overflow possibly leading to RCE/DoS. Findings about other ctypes issues are not TP.",
+    "safe_reproduction_predicate": "Static predicate: v3.9.1 callproc.c uses snprintf with a fixed buffer (removed by c347cbe). Dynamic reproduction: build v3.9.1 with ASAN and call repr() on crafted ctypes arguments in-process; verify no buffer overrun with benign values; no filesystem/network side effects.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-3177",
+      "https://bugs.python.org/issue42938",
+      "https://github.com/python/cpython/commit/c347cbe694743cee120457aa6626712f7799a932"
+    ]
+  }
+}

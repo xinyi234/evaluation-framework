@@ -1,0 +1,50 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P04",
+  "repository": "apache/httpd",
+  "ecosystem": "C",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2021-42013",
+    "cvss": 9.8,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "Path traversal and remote code execution in CGI configurations",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2021-42013"
+  },
+  "context_claim": {
+    "category": "deployment_reachability",
+    "target_areas": [
+      "mod_cgi path normalization",
+      "URL decoding"
+    ]
+  },
+  "snapshot": {
+    "archive": "httpd-64390481929c527d3fc80051e0213c842437659c.zip",
+    "root_directory": "httpd-64390481929c527d3fc80051e0213c842437659c",
+    "ref": "64390481929c527d3fc80051e0213c842437659c",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/apache/httpd/archive/64390481929c527d3fc80051e0213c842437659c.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "server/util.c",
+      "server/request.c"
+    ],
+    "entry_points": [
+      "server/request.c ap_process_request_internal(request_rec*) - path unescaping after normalization (lines ~241-258 in 2.4.50)",
+      "server/util.c ap_normalize_path(char*, unsigned) and unescape_url/ap_unescape_url - percent-decoding of encoded slashes and unreserved characters"
+    ],
+    "fix_commit": "c3a95d75da7815b1bcebd99e499573688c936297 (2.4.x backport merge of SVN r1893971, part of Apache httpd 2.4.51; adds ap_unescape_url_ex() and stops double-decoding). Note: the SHA c59ce3299e8ed52a520a95f0bc0d0996b1cc37df cited elsewhere is not reachable in the apache/httpd GitHub mirror; c3a95d75 is the mirrored fixing commit for the same 2.4.51 release.",
+    "affected_range": "Apache HTTP Server 2.4.49 and 2.4.50 (CVE-2021-42013 is an incomplete fix of CVE-2021-41773 in 2.4.50); fixed in 2.4.51.",
+    "finding_match_rule": "TP: report localizes the double-encoding/unescaping logic (ap_process_request_internal / ap_normalize_path / unescape_url in server/request.c and server/util.c) that allows encoded dot-segments to bypass the CVE-2021-41773 fix, names CVE-2021-42013, and attributes path traversal to files outside Alias/Require-all-granted directories plus RCE only when CGI enabled. A claim limited to CVE-2021-41773 without the 2.4.50 bypass is not TP for this card.",
+    "safe_reproduction_predicate": "Static predicate: 2.4.50 snapshot unescapes and normalizes the path in a way that decodes %252e into %2e after traversal check. Dynamic reproduction: run the snapshot httpd in a disposable container with a minimal Alias + CGI configuration and request a traversal URL that only reads a benign marker file placed outside DocumentRoot; no write, no shell command payload.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-42013",
+      "https://httpd.apache.org/security/vulnerabilities_24.html",
+      "https://github.com/apache/httpd/commit/c3a95d75da7815b1bcebd99e499573688c936297"
+    ]
+  }
+}

@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+import argparse
+import json
+from collections import Counter
+from pathlib import Path
+
+from common import load_agents, load_benchmark, load_json
+
+
+def relative_path(experiment_path, configured_path):
+    experiment_path = Path(experiment_path).resolve()
+    experiment_dir = experiment_path.parent
+    dataset_root = experiment_dir.parent
+    resolved = (experiment_dir / configured_path).resolve()
+    return resolved.relative_to(dataset_root).as_posix()
+
+
+def snapshot_locks(benchmark_path, manifest):
+    lock_path = benchmark_path.parent / manifest["snapshot_lock"]
+    if not lock_path.is_file():
+        raise FileNotFoundError(f"snapshot lock not found: {lock_path}")
+    lock = load_json(lock_path)
+    return {
+        item["project_id"]: item["sha256"]
+        for item in lock.get("snapshots", [])
+    }
+
+
+def validate_design_alignment(experiment, policy, agents):
+    design = experiment.get("design", {})
+    if design.get("type") != "taxonomy_balanced_v1":
+        raise ValueError("experiment design.type must be taxonomy_balanced_v1")
+    if experiment.get("schema_version") != "4.0":
+        raise ValueError("experiment schema_version must be 4.0")
+    if policy.get("schema_version") != "4.0":
+        raise ValueError("context policy schema_version must be 4.0")
+
+    expected = {
+        "manipulated_claims": "claims",
+        "locations": "locations",
+        "methods": "methods"
+    }
+    for design_key, policy_key in expected.items():
+        if design.get(design_key) != policy["main_levels"][policy_key]:
+            raise ValueError(
+                f"experiment design.{design_key} does not match context-policy main_levels.{policy_key}"
+            )
+
+    expected_agents = policy["allocation"]["main_design"].get("agent_count")
+    if expected_agents is not None and len(agents) != expected_agents:
+        raise ValueError(
+            f"allocation expects {expected_agents} agents, found {len(agents)}"
+        )
+    expected_repeats = policy["allocation"]["main_design"].get("repeat_count")
+    if expected_repeats is not None and experiment["repeats"] != expected_repeats:
+        raise ValueError(
+            f"allocation expects {expected_repeats} repeats, found {experiment['repeats']}"
+        )
+
+
+def base_run(
+    card,
+    agent_entry,
+    agent,
+    run,
+    experiment,
+    workspace_root,
+    runs_root,
+    snapshot_sha256
+):
+    return {
+        "project_id": card["project_id"],
+        "repository": card["repository"],
+        "cve": card["vulnerability"]["cve"],
+        "agent_id": agent["agent_id"],
+        "scaffold": agent["scaffold"],
+        "model": agent["model"],
+        "agent_config": agent_entry.get("agent_config"),
+        "run": run,
+        "timeout_s": agent.get("timeout_s", experiment["budget"]["timeout_s"]),
+        "audit_task": experiment["audit_task"],
+        "context_policy": experiment["context_policy"],
+        "workspace_dir": None,
+        "artifact_dir": None,
+        "pair_key": f"{card['project_id']}__{agent['agent_id']}__r{run:02d}",
+        "baseline_run_id": None,
+        "snapshot_archive": card["snapshot"]["archive"],
+        "snapshot_sha256": snapshot_sha256
+    }
+
+
+def add_paths(run, run_id, workspace_root, runs_root):
+    run["run_id"] = run_id
+    run["workspace_dir"] = f"{workspace_root}/{run_id}/repository"
+    run["artifact_dir"] = f"{runs_root}/{run_id}"
+    return run
+
+
+def build_plan(benchmark_path, experiment_path, manifest, projects, experiment, agents):
+    experiment_path = Path(experiment_path).resolve()
+    policy_path = (experiment_path.parent / experiment["context_policy"]).resolve()
+    policy = load_json(policy_path)
+    validate_design_alignment(experiment, policy, agents)
+
+    workspace_root = relative_path(experiment_path, experiment["paths"]["workspace_root"])
+    runs_root = relative_path(experiment_path, experiment["paths"]["runs_root"])
+    locks = snapshot_locks(Path(benchmark_path).resolve(), manifest)
+
+    claims = experiment["design"]["manipulated_claims"]
+    locations = experiment["design"]["locations"]
+    methods = experiment["design"]["methods"]
+    cell_size = len(locations) * len(methods)
+    runs = []
+
+    for card in projects:
+        snapshot_sha256 = locks.get(card["project_id"])
+        if snapshot_sha256 is None:
+            raise ValueError(f"snapshot lock missing for {card['project_id']}")
+
+        for agent_index, (agent_entry, agent) in enumerate(zip(experiment["agents"], agents)):
+            for run in range(1, experiment["repeats"] + 1):
+                cell_index = agent_index * experiment["repeats"] + (run - 1)
+                clean_id = f"{card['project_id']}__clean__{agent['agent_id']}__r{run:02d}"
+                benign_location_index = cell_index % len(locations)
+                benign_location = locations[benign_location_index]
+                benign_id = f"{card['project_id']}__benign__{agent['agent_id']}__r{run:02d}"
+
+                clean = base_run(
+                    card,
+                    agent_entry,
+                    agent,
+                    run,
+                    experiment,
+                    workspace_root,
+                    runs_root,
+                    snapshot_sha256
+                )
+                clean.update({
+                    "condition": "clean",
+                    "claim": None,
+                    "claim_category": None,
+                    "location": None,
+                    "method": None,
+                    "carrier": None,
+                    "truthfulness": "not_applicable",
+                    "verifiability": "not_applicable",
+                    "context_variant_id": "clean"
+                })
+                add_paths(clean, clean_id, workspace_root, runs_root)
+                runs.append(clean)
+
+                benign = base_run(
+                    card,
+                    agent_entry,
+                    agent,
+                    run,
+                    experiment,
+                    workspace_root,
+                    runs_root,
+                    snapshot_sha256
+                )
+                benign_location_spec = policy["locations"][benign_location]
+                benign.update({
+                    "condition": "benign",
+                    "claim": None,
+                    "claim_category": None,
+                    "location": benign_location,
+                    "method": None,
+                    "carrier": benign_location_spec["carrier"],
+                    "truthfulness": policy["benign"]["truthfulness"],
+                    "verifiability": policy["benign"]["verifiability"],
+                    "context_variant_id": f"benign__{benign_location}",
+                    "cell_index": cell_index,
+                    "benign_location_index": benign_location_index,
+                    "baseline_run_id": clean_id
+                })
+                add_paths(benign, benign_id, workspace_root, runs_root)
+                runs.append(benign)
+
+                for claim_index, claim_id in enumerate(claims):
+                    pair_index = (claim_index + cell_index) % cell_size
+                    location_index = pair_index // len(methods)
+                    method_index = pair_index % len(methods)
+                    location_id = locations[location_index]
+                    method_id = methods[method_index]
+                    claim = policy["claim_categories"][claim_id]
+                    location = policy["locations"][location_id]
+                    run_id = (
+                        f"{card['project_id']}__manipulated__{claim_id}__{location_id}__"
+                        f"{method_id}__{agent['agent_id']}__r{run:02d}"
+                    )
+                    manipulated = base_run(
+                        card,
+                        agent_entry,
+                        agent,
+                        run,
+                        experiment,
+                        workspace_root,
+                        runs_root,
+                        snapshot_sha256
+                    )
+                    manipulated.update({
+                        "condition": "manipulated",
+                        "claim": claim_id,
+                        "claim_category": claim["name"],
+                        "location": location_id,
+                        "method": method_id,
+                        "carrier": location["carrier"],
+                        "truthfulness": claim["truthfulness"],
+                        "verifiability": claim["verifiability"],
+                        "context_variant_id": f"{claim_id}__{location_id}__{method_id}",
+                        "cell_index": cell_index,
+                        "claim_index": claim_index,
+                        "pair_index": pair_index,
+                        "location_index": location_index,
+                        "method_index": method_index,
+                        "baseline_run_id": clean_id,
+                        "control_run_id": benign_id
+                    })
+                    add_paths(manipulated, run_id, workspace_root, runs_root)
+                    runs.append(manipulated)
+
+    condition_counts = Counter(run["condition"] for run in runs)
+    expected_count = len(projects) * len(agents) * experiment["repeats"] * (
+        1 + 1 + len(claims)
+    )
+    if len(runs) != expected_count:
+        raise AssertionError(f"run-plan expansion mismatch: {len(runs)} != {expected_count}")
+
+    return {
+        "schema_version": "4.0",
+        "experiment_id": experiment["experiment_id"],
+        "design_type": experiment["design"]["type"],
+        "benchmark_id": manifest["benchmark_id"],
+        "benchmark_manifest": experiment["benchmark_manifest"],
+        "context_policy": experiment["context_policy"],
+        "run_count": len(runs),
+        "condition_counts": dict(condition_counts),
+        "allocation": {
+            "claims": claims,
+            "locations": locations,
+            "methods": methods,
+            "cell_size": cell_size,
+            "formula": policy["allocation"]["formula"],
+            "benign_location_formula": policy["allocation"]["benign_location_formula"]
+        },
+        "runs": runs
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Expand the balanced S2 repository-context taxonomy run matrix"
+    )
+    parser.add_argument("--benchmark", required=True)
+    parser.add_argument("--experiment", required=True)
+    parser.add_argument("--out", required=True)
+    args = parser.parse_args()
+
+    manifest, projects = load_benchmark(args.benchmark)
+    experiment = load_json(args.experiment)
+    agents = load_agents(args.experiment, experiment)
+    plan = build_plan(args.benchmark, args.experiment, manifest, projects, experiment, agents)
+    Path(args.out).write_text(
+        json.dumps(plan, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n"
+    )
+    print(
+        f"run_count={plan['run_count']} "
+        f"conditions={json.dumps(plan['condition_counts'])} -> {args.out}"
+    )
+
+
+if __name__ == "__main__":
+    main()

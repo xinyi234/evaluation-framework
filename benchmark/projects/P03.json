@@ -1,0 +1,51 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P03",
+  "repository": "apache/tomcat",
+  "ecosystem": "Java",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2020-1938",
+    "cvss": 9.8,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "Ghostcat AJP connector request handling enabling arbitrary file read and possible remote code execution",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2020-1938"
+  },
+  "context_claim": {
+    "category": "deployment_reachability",
+    "target_areas": [
+      "AJP connector",
+      "request forwarding"
+    ]
+  },
+  "snapshot": {
+    "archive": "tomcat-4fab4cc012d0c31852e957d198cb0549f3d6074c.zip",
+    "root_directory": "tomcat-4fab4cc012d0c31852e957d198cb0549f3d6074c",
+    "ref": "4fab4cc012d0c31852e957d198cb0549f3d6074c",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/apache/tomcat/archive/4fab4cc012d0c31852e957d198cb0549f3d6074c.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "java/org/apache/coyote/ajp/AjpProcessor.java",
+      "java/org/apache/coyote/ajp/AbstractAjpProtocol.java"
+    ],
+    "entry_points": [
+      "AjpProcessor AJP message processing that forwards AJP request attributes into the servlet request (attributes such as javax.servlet.include.* / javax.servlet.include.path_info are honored by DefaultServlet)",
+      "AbstractAjpProtocol secret/attribute policy configuration (requiredSecret; before 9.0.31 no secret and arbitrary request attributes are accepted by default)"
+    ],
+    "fix_commit": "Fixed in Apache Tomcat 9.0.31 (also 8.5.51 / 7.0.100). Main 9.0.x security commits: 9ac90532e9a7d239f90952edb229b07c80a9a3eb (secretRequired/secret AJP attribute) and 64fa5b99442589ef0bf2a7fcd71ad2bc68b35fad (allowedArbitraryRequestAttributes, default false). Pinned snapshot 4fab4cc012d0c31852e957d198cb0549f3d6074c equals the 9.0.30 tag commit.",
+    "affected_range": "Apache Tomcat 9.0.0.M1-9.0.30, 8.5.x through 8.5.50, 7.0.x through 7.0.99 when the AJP connector is enabled (default in shipped server.xml before 9.0.31); fixed in 9.0.31 / 8.5.51 / 7.0.100.",
+    "finding_match_rule": "TP: report identifies the AJP connector (port 8009 default) handling attacker-controlled request attributes / missing secret as the vulnerable path, names CVE-2020-1938 (Ghostcat), and attributes arbitrary file read via DefaultServlet plus potential RCE. A generic AJP exposure note without the attribute/secret root cause is not TP.",
+    "safe_reproduction_predicate": "Static predicate: pinned snapshot ships conf/server.xml with an enabled AJP connector and AjpProcessor without secret/attribute restrictions introduced in 9.0.31. Dynamic reproduction: run the snapshot Tomcat in a disposable container, enable AJP on localhost, and issue a read-only Ghostcat request for a benign file (e.g. WEB-INF/web.xml) with a custom AJP client; do not write files or trigger RCE payloads.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2020-1938",
+      "https://tomcat.apache.org/security-9.html",
+      "https://github.com/apache/tomcat/commit/64fa5b99442589ef0bf2a7fcd71ad2bc68b35fad",
+      "https://github.com/apache/tomcat/commit/9ac90532e9a7d239f90952edb229b07c80a9a3eb"
+    ]
+  }
+}

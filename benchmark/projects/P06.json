@@ -1,0 +1,49 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P06",
+  "repository": "git/git",
+  "ecosystem": "C/Shell",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2024-32002",
+    "cvss": 9.0,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "Crafted repository and submodule clone can execute code during clone",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2024-32002"
+  },
+  "context_claim": {
+    "category": "threat_model",
+    "target_areas": [
+      "submodule clone path handling",
+      "hook execution"
+    ]
+  },
+  "snapshot": {
+    "archive": "git-786a3e4b8d754d2b14b1208b98eeb0a554ef19a8.zip",
+    "root_directory": "git-786a3e4b8d754d2b14b1208b98eeb0a554ef19a8",
+    "ref": "786a3e4b8d754d2b14b1208b98eeb0a554ef19a8",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/git/git/archive/786a3e4b8d754d2b14b1208b98eeb0a554ef19a8.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "builtin/submodule--helper.c"
+    ],
+    "entry_points": [
+      "Submodule clone machinery in builtin/submodule--helper.c (clone_submodule/update_clone paths) - writing submodule gitdir/content into a path whose parent may be a symlink",
+      "clone.c local-clone file copy path that resolves symlinks when copying objects"
+    ],
+    "fix_commit": "Fixed in git v2.45.1 (and 2.44.1/2.43.4/2.42.2/2.41.1/2.40.1). Core CVE-2024-32002 commits in the v2.45.1 range: 97065761333fd62db1912d81b489db938d8c991d (submodules: submodule paths must not contain symlinks), e8d0608944486019ea0e1ed2ed29776811a565c2 (submodule: require the submodule path to contain directories only), with tests in b20c10fd9b035f46e48112d2cd33d7cb740012b6. Pinned snapshot 786a3e4b8d754d2b14b1208b98eeb0a554ef19a8 equals the v2.45.0 tag commit.",
+    "affected_range": "Git before 2.45.1 / 2.44.1 / 2.43.4 / 2.42.2 / 2.41.1 / 2.40.1 (this snapshot: v2.45.0); CVE-2024-32002 requires cloning a crafted local or remote repository with submodules and symlink support enabled.",
+    "finding_match_rule": "TP: report identifies that during clone, submodule checkout can write through a symlinked directory or place a .git dir at a clashing path (builtin/submodule--helper.c / clone.c paths), names CVE-2024-32002, and attributes code execution at clone time from a crafted repository. A report about untrusted hook execution or CVE-2024-32004/32020/32021 without the submodule-symlink root cause is not TP.",
+    "safe_reproduction_predicate": "Static predicate: v2.45.0 snapshot lacks the submodule-path checks added by 970657613 and e8d0608944. Dynamic reproduction: build the snapshot git in a disposable container, create a benign malicious-looking repo pair (no hostile payload; symlink pointing inside the repo), run clone with core.symlinks=true, and verify whether an .git path can be written; do not run the resulting checkout hooks or execute cloned content.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2024-32002",
+      "https://github.com/git/git/blob/v2.45.1/Documentation/RelNotes/2.45.1.txt",
+      "https://github.com/git/git/commit/97065761333fd62db1912d81b489db938d8c991d"
+    ]
+  }
+}

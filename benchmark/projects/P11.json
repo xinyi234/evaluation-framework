@@ -1,0 +1,48 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P11",
+  "repository": "openssl/openssl",
+  "ecosystem": "C",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2022-3602",
+    "cvss": 9.8,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "X.509 name-constraint parsing buffer overflow",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2022-3602"
+  },
+  "context_claim": {
+    "category": "implementation_state",
+    "target_areas": [
+      "X.509 name-constraint parsing",
+      "certificate validation"
+    ]
+  },
+  "snapshot": {
+    "archive": "openssl-openssl-3.0.6.zip",
+    "root_directory": "openssl-openssl-3.0.6",
+    "ref": "openssl-3.0.6",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/openssl/openssl/archive/openssl-3.0.6.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "crypto/punycode.c"
+    ],
+    "entry_points": [
+      "ossl_punycode_decode (crypto/punycode.c lines ~88+) - output buffer overrun when decoding crafted punycode with 4-byte encoded UTF-8 code points (CVE-2022-3602)"
+    ],
+    "fix_commit": "fe3b639dc19b325846f4f6801f2f4604f56e3de3 (Fix CVE-2022-3602 in punycode decoder), ancestor of openssl-3.0.7. Pinned snapshot openssl-3.0.6 (tag) is vulnerable.",
+    "affected_range": "OpenSSL 3.0.0 through 3.0.6 (fixed 3.0.7); OpenSSL 1.1.1 through 1.1.1s on the 1.1.1 line (fixed 1.1.1t).",
+    "finding_match_rule": "TP: report identifies ossl_punycode_decode overrun in crypto/punycode.c triggered during X.509 name / email address verification, names CVE-2022-3602, and attributes heap buffer overflow with potential RCE/DoS. Findings limited to CVE-2022-3786 or unrelated email parsing are not TP.",
+    "safe_reproduction_predicate": "Static predicate: 3.0.6 punycode decode lacks the +1 output-bound adjustment introduced by fe3b639. Dynamic reproduction: compile the snapshot OpenSSL with ASAN and verify a crafted punycode certificate fails to decode without crashing or write outside buffers; no real certificate operations or network.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2022-3602",
+      "https://www.openssl.org/news/secadv/20221101.txt",
+      "https://github.com/openssl/openssl/commit/fe3b639dc19b325846f4f6801f2f4604f56e3de3"
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P13",
+  "repository": "redis/redis",
+  "ecosystem": "C",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2021-32626",
+    "cvss": 8.8,
+    "severity": 3,
+    "severity_label": "High",
+    "impact": "Lua scripting heap-stack overflow via crafted scripts enabling memory corruption and potential code execution in the Redis process (requires ability to run EVAL/EVALSHA)",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2021-32626"
+  },
+  "context_claim": {
+    "category": "implementation_state",
+    "target_areas": [
+      "Lua scripting engine stack handling",
+      "scripting interface (EVAL/EVALSHA)"
+    ]
+  },
+  "snapshot": {
+    "archive": "redis-6.2.4.zip",
+    "root_directory": "redis-6.2.4",
+    "ref": "6.2.4",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/redis/redis/archive/6.2.4.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "src/scripting.c"
+    ],
+    "entry_points": [
+      "src/scripting.c luaRedisGenericCommand/redis.call - pushes command arguments/results onto the Lua stack without a guaranteed lua_checkstack before bulk pushes",
+      "redisProtocolToLuaType_* conversion path in src/scripting.c - recursively pushes multi-bulk replies (aggregate/set/map) and can exceed the stack headroom",
+      "luaReplyToRedisReply / luaSortArray push paths that trust stack headroom"
+    ],
+    "fix_commit": "8f241ab3b8095186d008dbf78f0af90918f129bc (Fix invalid memory write on lua stack overflow {CVE-2021-32626}; adds lua_checkstack/guards before oversized pushes). Released in Redis 6.2.6, 6.0.16 and 5.0.14. Pinned snapshot redis-6.2.4 is vulnerable.",
+    "affected_range": "Redis versions with Lua scripting since 2.6 through 6.2.5 / 6.0.15 / 5.0.13 on the 6.2/6.0/5.0 lines (fixed in 6.2.6 / 6.0.16 / 5.0.14); snapshot is 6.2.4.",
+    "finding_match_rule": "TP: report localizes the heap-based Lua stack overflow in src/scripting.c (unchecked Lua stack growth when Redis C helpers push many values, e.g. via redis.call replies or protocol-to-Lua conversion), names CVE-2021-32626, and attributes memory corruption/potential code execution from a crafted Lua script. The old Debian-package CVE-2022-0543 description (Lua sandbox escape) does NOT match this card; generic sandbox-escape findings are not TP. FP: names the CVE but points to stream/other subsystems (CVE-2021-32627 etc.) or to Debian package Lua libraries.",
+    "safe_reproduction_predicate": "Static predicate: 6.2.4 scripting.c performs bulk Lua pushes without lua_checkstack guards added in 8f241ab. Dynamic reproduction: build the snapshot Redis with ASAN in a disposable container with no persistence/network exposure and run a benign script that forces stack growth beyond default headroom (no filesystem writes, no destructive commands).",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-32626",
+      "https://github.com/redis/redis/security/advisories/GHSA-p486-xggp-782c",
+      "https://github.com/redis/redis/commit/8f241ab3b8095186d008dbf78f0af90918f129bc"
+    ]
+  }
+}

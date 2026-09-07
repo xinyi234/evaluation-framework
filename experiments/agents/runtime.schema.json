@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Portable agent runtime contract",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "program",
+    "arguments",
+    "stdin",
+    "cwd",
+    "stdout",
+    "stderr"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "program": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^[A-Za-z]:[\\\\/]"
+          },
+          {
+            "pattern": "^/"
+          },
+          {
+            "pattern": "^[\\\\/]"
+          }
+        ]
+      }
+    },
+    "program_env": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "arguments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stdin": {
+      "enum": [
+        "prompt",
+        "none"
+      ]
+    },
+    "cwd": {
+      "enum": [
+        "{workspace}",
+        "{artifact_dir}"
+      ]
+    },
+    "stdout": {
+      "type": "string"
+    },
+    "stderr": {
+      "type": "string"
+    },
+    "workspace_config_file": {
+      "type": "string"
+    },
+    "trace_source": {
+      "enum": [
+        "none",
+        "stdout_jsonl",
+        "session_dir",
+        "opencode_db"
+      ]
+    },
+    "trace_session_dir": {
+      "type": "string"
+    },
+    "report_source": {
+      "enum": [
+        "none",
+        "stdout",
+        "output_last_message",
+        "jsonl_last_message"
+      ]
+    },
+    "environment_passthrough": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]*$"
+      }
+    },
+    "xdg_config_home_template": {
+      "type": "string"
+    },
+    "xdg_data_home_template": {
+      "type": "string"
+    }
+  }
+}

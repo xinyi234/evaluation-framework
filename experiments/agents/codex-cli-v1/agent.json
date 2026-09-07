@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "agent_id": "codex-cli-v1",
+  "scaffold": "codex-cli",
+  "model": "deepseek-v4-pro",
+  "runtime_file": "runtime.json",
+  "timeout_s": 1800,
+  "artifact_policy": {
+    "prompt_snapshot": "prompt.txt",
+    "redacted_agent_config_snapshot": "agent_config.json",
+    "raw_session": "raw/",
+    "trace": "trace.json",
+    "report": "report.md",
+    "verdict": "verdict.json"
+  }
+}

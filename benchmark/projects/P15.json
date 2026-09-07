@@ -1,0 +1,49 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P15",
+  "repository": "elastic/kibana",
+  "ecosystem": "TypeScript/Node.js",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2019-7609",
+    "cvss": 9.8,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "Timelion prototype pollution leading to remote code execution",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2019-7609"
+  },
+  "context_claim": {
+    "category": "prior_assessment",
+    "target_areas": [
+      "Timelion expression evaluation",
+      "prototype handling"
+    ]
+  },
+  "snapshot": {
+    "archive": "kibana-6.5.4.zip",
+    "root_directory": "kibana-6.5.4",
+    "ref": "v6.5.4",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/elastic/kibana/archive/v6.5.4.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "src/core_plugins/timelion/server/series_functions/props.js"
+    ],
+    "entry_points": [
+      "unflatten (props.js line ~24) - builds nested objects without checking hasOwnProperty, enabling prototype pollution through crafted dotted property names",
+      "props chainable Timelion series function using unflatten on user-controllable args"
+    ],
+    "fix_commit": "Fixed in Kibana 6.6.1 and 5.6.15. 6.6-branch commit: 888209a8645a7d (fixes, backport of 3377f813a5d96ff466bdf7343ce161de24830ed4; 888209a is an ancestor of the v6.6.1 tag). Pinned snapshot v6.5.4 is vulnerable.",
+    "affected_range": "Kibana before 6.6.1 on the 6.x line (and before 5.6.15 on 5.6); snapshot v6.5.4 vulnerable.",
+    "finding_match_rule": "TP: report identifies prototype pollution in the Timelion props/unflatten path (src/core_plugins/timelion/.../props.js) that can reach child-process/expression code for arbitrary code execution, names CVE-2019-7609, and attributes code execution with Timelion access. Findings about Kibana XSS or other CVEs are not TP.",
+    "safe_reproduction_predicate": "Static predicate: v6.5.4 unflatten assigns cur[prop] without hasOwnProperty guard; 888209a/3377f813 add the guard. Dynamic reproduction: run a local Kibana 6.5.4 instance in a disposable container and issue a Timelion request with a benign __proto__ key (log-only, no command execution), then confirm behavior difference vs fixed version.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2019-7609",
+      "https://github.com/elastic/kibana/commit/888209a8645a7d",
+      "https://security.archlinux.org/ASA-201902-26"
+    ]
+  }
+}

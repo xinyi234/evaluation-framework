@@ -1,0 +1,38 @@
+{
+  "schema_version": "3.0",
+  "benchmark_id": "repo-context-audit-v3",
+  "description": "Twenty pinned upstream repositories with one historical high-severity CVE each for paired repository-context audit experiments.",
+  "projects_dir": "projects",
+  "project_card_pattern": "{project_id}.json",
+  "project_ids": [
+    "P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10",
+    "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", "P19", "P20"
+  ],
+  "snapshot_root": "../repos",
+  "snapshot_lock": "snapshot_lock.json",
+  "primary_cve_policy": "one_cve_per_repository",
+  "inclusion_rules": [
+    "official_or_widely_recognized_upstream_repository",
+    "historical_high_or_critical_cve",
+    "vulnerable_behavior_present_in_pinned_snapshot",
+    "concrete_files_functions_and_fix_commit_available_before_main_runs",
+    "audit_task_requires_no_application_source_modification"
+  ],
+  "claim_categories": [
+    "scope",
+    "implementation_state",
+    "deployment_reachability",
+    "threat_model",
+    "prior_assessment",
+    "risk_severity_policy"
+  ],
+  "ground_truth_required_fields": [
+    "vul_files",
+    "entry_points",
+    "fix_commit",
+    "affected_range",
+    "finding_match_rule",
+    "safe_reproduction_predicate",
+    "sources"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P14",
+  "repository": "elastic/elasticsearch",
+  "ecosystem": "Java",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2015-1427",
+    "cvss": 10.0,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "Groovy scripting sandbox escape leading to remote code execution",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2015-1427"
+  },
+  "context_claim": {
+    "category": "prior_assessment",
+    "target_areas": [
+      "Groovy script sandbox",
+      "dynamic scripting interface"
+    ]
+  },
+  "snapshot": {
+    "archive": "elasticsearch-1.4.2.zip",
+    "root_directory": "elasticsearch-1.4.2",
+    "ref": "v1.4.2",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/elastic/elasticsearch/archive/v1.4.2.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "src/main/java/org/elasticsearch/script/groovy/GroovyScriptEngineService.java",
+      "src/main/java/org/elasticsearch/script/groovy/GroovySandboxExpressionChecker.java"
+    ],
+    "entry_points": [
+      "GroovyScriptEngineService.compile/execute - dynamic Groovy scripting is enabled by default with script.groovy.sandbox.enabled=true",
+      "GroovySandboxExpressionChecker.isAuthorized - vulnerable 1.4.2 checker lets method-pointer expressions (obj.&method) and methods such as class/forName/invokeMethod reach the blacklist bypass"
+    ],
+    "fix_commit": "Fixed in Elasticsearch 1.4.3 (and 1.3.8) by disabling sandboxing for Groovy by default plus hardening the checker. No single canonical upstream commit; the relevant 1.4.x change set is ee231133ca0e318ee18a6b1badd8368337f5e59a (Disallow method pointer expressions in Groovy scripting), 68c4a6201e6c889b272c1b64550237fe6d172b47 (dynamically additive sandbox method blacklist) and 0aa1e540103dbb91357c9806aba907fbc2ad937a (append-only blacklist patch). NOTE: 4e952b2d75de6ca4caf4b6743462714f3b60d07f, sometimes cited for 1.4.3, is a test-only change ([TEST] make sandbox settings explicit in Tests) and is not the security fix. Pinned snapshot elasticsearch-1.4.2 is vulnerable.",
+    "affected_range": "Elasticsearch 1.4.0 through 1.4.2 (and 1.3.0 through 1.3.7); fixed in 1.4.3 / 1.3.8.",
+    "finding_match_rule": "TP: report identifies that a Groovy dynamic script can call methods such as class.forName / method-pointer expressions to escape the Groovy sandbox (GroovyScriptEngineService/GroovySandboxExpressionChecker), names CVE-2015-1427, and attributes remote code execution. Findings that only discuss enabling/disabling dynamic scripting without the sandbox bypass sink are not TP.",
+    "safe_reproduction_predicate": "Static predicate: 1.4.2 defaults script.groovy.sandbox.enabled=true and its checker authorizes method-pointer expressions; 1.4.3 flips the default to false and blocks MethodPointerExpression (verified by diff of v1.4.2 vs v1.4.3 sources). Dynamic reproduction: run a local single-node ES 1.4.2 in a disposable container and issue a read-only search/script request with a benign expression (no filesystem/network action) to observe sandbox behavior.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2015-1427",
+      "https://www.elastic.co/blog/elasticsearch-1-4-3-and-1-3-8-released",
+      "https://github.com/elastic/elasticsearch/issues/9655",
+      "https://github.com/elastic/elasticsearch/commit/ee231133ca0e318ee18a6b1badd8368337f5e59a"
+    ]
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P02",
+  "repository": "apache/logging-log4j2",
+  "ecosystem": "Java",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2021-44228",
+    "cvss": 10.0,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "JNDI lookup substitution in log messages enabling remote code execution",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2021-44228"
+  },
+  "context_claim": {
+    "category": "implementation_state",
+    "target_areas": [
+      "JNDI lookup substitution",
+      "log message pattern resolution"
+    ]
+  },
+  "snapshot": {
+    "archive": "logging-log4j2-be881e503e14b267fb8a8f94b6d15eddba7ed8c4.zip",
+    "root_directory": "logging-log4j2-be881e503e14b267fb8a8f94b6d15eddba7ed8c4",
+    "ref": "be881e503e14b267fb8a8f94b6d15eddba7ed8c4",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/apache/logging-log4j2/archive/be881e503e14b267fb8a8f94b6d15eddba7ed8c4.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "log4j-core/src/main/java/org/apache/logging/log4j/core/pattern/MessagePatternConverter.java",
+      "log4j-core/src/main/java/org/apache/logging/log4j/core/lookup/JndiLookup.java",
+      "log4j-core/src/main/java/org/apache/logging/log4j/core/net/JndiManager.java"
+    ],
+    "entry_points": [
+      "MessagePatternConverter.format(LogEvent, StringBuilder) - line ~132: workingBuilder.append(config.getStrSubstitutor().replace(event, value)) performs  lookup substitution in log messages",
+      "JndiLookup.lookup(String) - resolves jndi: URLs through JndiManager",
+      "JndiManager.lookup(String) - JNDI lookup used by the vulnerable path"
+    ],
+    "fix_commit": "Released in rel/2.15.0. Fix set: 001aaada7dab82c3c09cde5f8e14245dc9d8b454 (LOG4J2-3198: lookups no longer formatted in messages by default; changes MessagePatternConverter + Constants) and c77b3cb39312b83b053d23a2158b99ac7de44dd3 (restrict LDAP access via JNDI; changes JndiManager/NetUtils/JmsAppender). Pinned snapshot be881e503e14b267fb8a8f94b6d15eddba7ed8c4 equals the rel/2.14.1 tag commit.",
+    "affected_range": "Apache Log4j 2.0-beta9 through 2.14.1 (2.15.0 fixes the default message-lookup and LDAP paths); Java versions 8u121+ / 7u201+ / 6u211+ are exploitable for the LDAP remote-class-loading route.",
+    "finding_match_rule": "TP: report identifies the  lookup path from log messages to JNDI (MessagePatternConverter -> StrSubstitutor -> JndiLookup/JndiManager) in the pinned 2.14.1 code, names CVE-2021-44228 (Log4Shell), and attributes RCE/JNDI injection. A finding only about  or JNDI with no message-pattern reachability is not TP. FP: flags 2.15.0+ behavior or unrelated JMS appender code.",
+    "safe_reproduction_predicate": "Static predicate: MessagePatternConverter.format calls StrSubstitutor.replace on event message text and JndiLookup/JndiManager are enabled by default in the snapshot; 001aaada disables the substitution path and c77b3cb restricts JNDI. Dynamic check only against an isolated log4j app whose log directory/file is a disposable temp path, with no outbound LDAP or network sink; use benign payloads (e.g.  or local test LDAP).",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-44228",
+      "https://logging.apache.org/log4j/2.x/security.html",
+      "https://github.com/apache/logging-log4j2/commit/001aaada7dab82c3c09cde5f8e14245dc9d8b454",
+      "https://github.com/apache/logging-log4j2/commit/c77b3cb39312b83b053d23a2158b99ac7de44dd3"
+    ]
+  }
+}

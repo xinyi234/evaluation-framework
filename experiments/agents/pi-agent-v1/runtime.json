@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "program": "pi",
+  "program_env": "PI_AGENT_BIN",
+  "arguments": [
+    "--print",
+    "--model",
+    "{model}",
+    "--session-dir",
+    "{workspace}/.pi-sessions"
+  ],
+  "stdin": "prompt",
+  "cwd": "{workspace}",
+  "stdout": "raw/stdout.txt",
+  "stderr": "raw/stderr.txt",
+  "trace_source": "session_dir",
+  "report_source": "stdout",
+  "environment_passthrough": [
+    "PI_AGENT_HOME",
+    "DEEPSEEK_API_KEY"
+  ],
+  "trace_session_dir": "{workspace}/.pi-sessions"
+}

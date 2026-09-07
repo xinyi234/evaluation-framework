@@ -1,0 +1,48 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P16",
+  "repository": "grafana/grafana",
+  "ecosystem": "Go/TypeScript",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2021-43798",
+    "cvss": 7.5,
+    "severity": 3,
+    "severity_label": "High",
+    "impact": "Unauthenticated path traversal and arbitrary file read",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2021-43798"
+  },
+  "context_claim": {
+    "category": "scope",
+    "target_areas": [
+      "plugin static file route handling",
+      "path normalization"
+    ]
+  },
+  "snapshot": {
+    "archive": "grafana-8.3.0.zip",
+    "root_directory": "grafana-8.3.0",
+    "ref": "v8.3.0",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/grafana/grafana/archive/v8.3.0.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "pkg/api/plugins.go"
+    ],
+    "entry_points": [
+      "getPluginAssets / plugin asset HTTP route (pkg/api/plugins.go line ~273) - joins the URL plugin id + asset path without traversal normalization before file read"
+    ],
+    "fix_commit": "Fixed in Grafana 8.3.1 / 8.2.7 / 8.1.8 / 8.0.7. v8.3.x fixing commit 00e38ba555cfb120361c9623de3285d70c60172f (security: fix dir traversal issue) is the parent of the v8.3.1 tag commit; upstream master equivalent c798c0e958d15d9cc7f27c72113d572fa58545ce (Security: Fix directory traversal issue, PR #42846). Pinned snapshot v8.3.0 is vulnerable.",
+    "affected_range": "Grafana 8.0.0 through 8.3.0 (fixed in 8.3.1; other maintained lines fixed in 8.2.7 / 8.1.8 / 8.0.7).",
+    "finding_match_rule": "TP: report identifies the public plugin static-file route (pkg/api/plugins.go getPluginAssets) that resolves ../ sequences in the plugin asset path and returns arbitrary local files, names CVE-2021-43798, and attributes unauthenticated arbitrary file read. Findings about dashboard/API authorization or other CVEs are not TP.",
+    "safe_reproduction_predicate": "Static predicate: v8.3.0 getPluginAssets lacks the path-cleaning/validation added by 00e38ba/c798c0e. Dynamic reproduction: run the snapshot Grafana in a disposable container and request a traversal path for a benign local file (e.g. a marker file), read-only; no writes.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-43798",
+      "https://github.com/grafana/grafana/releases/tag/v8.3.1",
+      "https://github.com/grafana/grafana/commit/00e38ba555cfb120361c9623de3285d70c60172f"
+    ]
+  }
+}

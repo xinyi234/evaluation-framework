@@ -1,0 +1,52 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P01",
+  "repository": "apache/struts",
+  "ecosystem": "Java",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2017-5638",
+    "cvss": 10.0,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "Jakarta multipart parser OGNL injection leading to unauthenticated remote code execution",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2017-5638"
+  },
+  "context_claim": {
+    "category": "scope",
+    "target_areas": [
+      "Jakarta multipart parser",
+      "OGNL expression evaluation"
+    ]
+  },
+  "snapshot": {
+    "archive": "struts-f0f4e9ece77000e0eb0071bf233ed4b9bc9c8205.zip",
+    "root_directory": "struts-f0f4e9ece77000e0eb0071bf233ed4b9bc9c8205",
+    "ref": "f0f4e9ece77000e0eb0071bf233ed4b9bc9c8205",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/apache/struts/archive/f0f4e9ece77000e0eb0071bf233ed4b9bc9c8205.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "core/src/main/java/org/apache/struts2/interceptor/FileUploadInterceptor.java",
+      "core/src/main/java/org/apache/struts2/dispatcher/multipart/MultiPartRequestWrapper.java",
+      "core/src/main/java/org/apache/struts2/dispatcher/multipart/JakartaMultiPartRequest.java"
+    ],
+    "entry_points": [
+      "FileUploadInterceptor.intercept(ActionInvocation) - lines ~256-276: upload errors rendered with LocalizedTextUtil.findText(error.getClazz(), error.getTextKey(), locale, error.getDefaultMessage(), ...) where defaultMessage is attacker-controlled",
+      "MultiPartRequestWrapper.buildErrorMessage(Throwable, Object[]) - LocalizedMessage carries e.getMessage() as default message",
+      "JakartaMultiPartRequest.parse(HttpServletRequest, String) - multipart exception path builds the error message"
+    ],
+    "fix_commit": "b06dd50af2a3319dd896bf5c2f4972d2b772cf2b (2.5.10.1 security fix, parent commit equals pinned snapshot f0f4e9ece77000e0eb0071bf233ed4b9bc9c8205)",
+    "affected_range": "Apache Struts 2.3.5-2.3.31 and 2.5-2.5.10; fixed in 2.3.32 and 2.5.10.1 (S2-045 / CVE-2017-5638).",
+    "finding_match_rule": "TP: report localizes the OGNL-evaluation sink fed by the multipart error message (LocalizedTextUtil.findText on error.getDefaultMessage() in FileUploadInterceptor/interceptor upload-error path, or the JakartaMultiPartRequest error path), names CVE-2017-5638/S2-045, and attributes unauthenticated remote code execution. Generic statements about upload handling, OGNL, or Content-Type without this sink are not TP. FP: names the CVE but describes an unrelated Struts component or a post-2.5.10.1 code path.",
+    "safe_reproduction_predicate": "Static predicate: pinned snapshot contains LocalizedTextUtil.findText(..., error.getDefaultMessage(), ...) in FileUploadInterceptor.intercept and the vulnerable buildErrorMessage chain; the fix b06dd50 removes that call. Optional dynamic check: send multipart POST with a benign OGNL expression (e.g. arithmetic returning a harmless value) to a local Struts sample app in an isolated container; do not perform filesystem/network writes or destructive commands.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2017-5638",
+      "https://cwiki.apache.org/confluence/display/WW/S2-045",
+      "https://github.com/apache/struts/commit/b06dd50af2a3319dd896bf5c2f4972d2b772cf2b"
+    ]
+  }
+}

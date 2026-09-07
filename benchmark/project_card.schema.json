@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repository-context audit project card",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_id",
+    "repository",
+    "ecosystem",
+    "primary_experiment",
+    "vulnerability",
+    "context_claim",
+    "snapshot",
+    "ground_truth_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "3.0"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^P[0-9]{2}$"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+$"
+    },
+    "ecosystem": {
+      "type": "string",
+      "minLength": 1
+    },
+    "primary_experiment": {
+      "const": true
+    },
+    "vulnerability": {
+      "type": "object",
+      "required": [
+        "cve",
+        "cvss",
+        "severity",
+        "severity_label",
+        "impact",
+        "nvd_url"
+      ],
+      "properties": {
+        "cve": {
+          "type": "string",
+          "pattern": "^CVE-[0-9]{4}-[0-9]+$"
+        },
+        "cvss": {
+          "type": "number",
+          "minimum": 7.0,
+          "maximum": 10.0
+        },
+        "severity": {
+          "enum": [
+            3,
+            4
+          ]
+        },
+        "severity_label": {
+          "enum": [
+            "High",
+            "Critical"
+          ]
+        },
+        "impact": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nvd_url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "context_claim": {
+      "type": "object",
+      "required": [
+        "category",
+        "target_areas"
+      ],
+      "properties": {
+        "category": {
+          "enum": [
+            "scope",
+            "implementation_state",
+            "deployment_reachability",
+            "threat_model",
+            "prior_assessment",
+            "risk_severity_policy"
+          ]
+        },
+        "target_areas": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "archive",
+        "root_directory",
+        "ref",
+        "ref_type",
+        "upstream_archive_url",
+        "immutability"
+      ],
+      "properties": {
+        "archive": {
+          "type": "string",
+          "pattern": "^[^/\\\\]+\\.zip$"
+        },
+        "root_directory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ref_type": {
+          "enum": [
+            "commit",
+            "tag"
+          ]
+        },
+        "upstream_archive_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "immutability": {
+          "const": "sha256_snapshot_lock"
+        }
+      }
+    },
+    "ground_truth_status": {
+      "enum": [
+        "provisional",
+        "frozen"
+      ]
+    },
+    "ground_truth": {
+      "type": "object",
+      "required": [
+        "vul_files",
+        "entry_points",
+        "fix_commit",
+        "affected_range",
+        "finding_match_rule",
+        "safe_reproduction_predicate",
+        "sources"
+      ],
+      "properties": {
+        "vul_files": {
+          "type": "array",
+          "minItems": 1
+        },
+        "entry_points": {
+          "type": "array",
+          "minItems": 1
+        },
+        "fix_commit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "affected_range": {
+          "type": "string",
+          "minLength": 1
+        },
+        "finding_match_rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "safe_reproduction_predicate": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 2
+        },
+        "injected_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "doc_globs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "code_globs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

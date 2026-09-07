@@ -1,0 +1,52 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P07",
+  "repository": "django/django",
+  "ecosystem": "Python",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2022-34265",
+    "cvss": 9.8,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "SQL injection in Trunc and Extract database functions",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2022-34265"
+  },
+  "context_claim": {
+    "category": "scope",
+    "target_areas": [
+      "database function expression compilation",
+      "Trunc and Extract functions"
+    ]
+  },
+  "snapshot": {
+    "archive": "django-9736596bce4f711ccf2914284938d85748838c94.zip",
+    "root_directory": "django-9736596bce4f711ccf2914284938d85748838c94",
+    "ref": "9736596bce4f711ccf2914284938d85748838c94",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/django/django/archive/9736596bce4f711ccf2914284938d85748838c94.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "django/db/backends/base/operations.py",
+      "django/db/backends/mysql/operations.py",
+      "django/db/models/functions/datetime.py"
+    ],
+    "entry_points": [
+      "BaseDatabaseOperations.datetime_extract_sql / datetime_trunc_sql (base/operations.py lines ~138/149) - kind/lookup_name concatenated into SQL",
+      "DatabaseOperations.datetime_extract_sql / datetime_trunc_sql in mysql/operations.py",
+      "django.db.models.functions.datetime Extract(kind)/Trunc(kind) construction path"
+    ],
+    "fix_commit": "Fixed in Django 4.0.6 (and 3.2.14). 4.0.x backport commit: 0dc9c016fadb71a067e5a42be30164e3f96c0492 ([4.0.x] Fixed CVE-2022-34265 - Protected Trunc(kind)/Extract(lookup_name) against SQL injection). Main-branch equivalents: 877c800f255ccaa7abde1fb944de45d1616f5cc9 and 5e2f4ddf2940704a26a4ac782b851989668d74db. Pinned snapshot 9736596bce4f711ccf2914284938d85748838c94 equals the 4.0.5 tag commit.",
+    "affected_range": "Django 4.0.x before 4.0.6 (this snapshot: 4.0.5); Django 3.2.x before 3.2.14 (older branches affected but not supported).",
+    "finding_match_rule": "TP: report shows that user-controlled kind/lookup_name reaches datetime_extract_sql/datetime_trunc_sql (or the Extract/Trunc constructors) without validation/quoting, names CVE-2022-34265, and attributes SQL injection in database functions. A generic ORM/SQL-injection finding elsewhere in Django is not TP.",
+    "safe_reproduction_predicate": "Static predicate: 4.0.5 operations concatenate kind/lookup_name into generated SQL; 0dc9c016 adds lookup validation and quoting. Dynamic reproduction: run the snapshot Django with SQLite/MySQL in a disposable DB, call Extract/Trunc with a benign non-matching lookup (no destructive SQL), verify error/behavior; do not target production data.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2022-34265",
+      "https://www.djangoproject.com/weblog/2022/jul/04/security-releases/",
+      "https://github.com/django/django/commit/0dc9c016fadb71a067e5a42be30164e3f96c0492"
+    ]
+  }
+}

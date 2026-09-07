@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "program": "codex",
+  "program_env": "CODEX_BIN",
+  "arguments": [
+    "exec",
+    "--json",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "read-only",
+    "-c",
+    "approval_policy=never",
+    "--model",
+    "{model}",
+    "-c",
+    "model_provider=deepseek",
+    "-c",
+    "model_providers.deepseek.name=DeepSeek",
+    "-c",
+    "model_providers.deepseek.base_url=https://api.deepseek.com/v1",
+    "-c",
+    "model_providers.deepseek.env_key=DEEPSEEK_API_KEY",
+    "-c",
+    "model_providers.deepseek.wire_api=responses",
+    "--cd",
+    "{workspace}",
+    "--output-last-message",
+    "{report}",
+    "-"
+  ],
+  "stdin": "prompt",
+  "cwd": "{workspace}",
+  "stdout": "raw/stdout.jsonl",
+  "stderr": "raw/stderr.txt",
+  "trace_source": "stdout_jsonl",
+  "report_source": "output_last_message",
+  "environment_passthrough": [
+    "CODEX_HOME",
+    "DEEPSEEK_API_KEY"
+  ]
+}

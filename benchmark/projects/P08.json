@@ -1,0 +1,49 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P08",
+  "repository": "kubernetes/kubernetes",
+  "ecosystem": "Go",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2018-1002105",
+    "cvss": 10.0,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "API-server proxy upgrade privilege escalation",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2018-1002105"
+  },
+  "context_claim": {
+    "category": "threat_model",
+    "target_areas": [
+      "API-server proxy upgrade handling",
+      "request routing"
+    ]
+  },
+  "snapshot": {
+    "archive": "kubernetes-be1a908c6aa47e0ae1b1dc861a1de6ccfe963aa2.zip",
+    "root_directory": "kubernetes-be1a908c6aa47e0ae1b1dc861a1de6ccfe963aa2",
+    "ref": "be1a908c6aa47e0ae1b1dc861a1de6ccfe963aa2",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/kubernetes/kubernetes/archive/be1a908c6aa47e0ae1b1dc861a1de6ccfe963aa2.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "staging/src/k8s.io/apimachinery/pkg/util/proxy/upgradeaware.go"
+    ],
+    "entry_points": [
+      "UpgradeAwareHandler.tryUpgrade (upgradeaware.go lines ~272-310) - after DialForUpgrade reads rawResponse, it does not verify the backend responded 101 Switching Protocols before proxying/continuing",
+      "UpgradeAwareHandler.ServeHTTP - dispatches to tryUpgrade for connection upgrade requests"
+    ],
+    "fix_commit": "Fixed in Kubernetes v1.10.11 (also 1.13.2/1.12.4/1.11.6/1.9.11). release-1.10 branch commits: 0535bcef95a33855f0a722c8cd822c663fc6275e (Verify backend upgraded connection) and 1a2afae109f9b03ac436c4794add543ecdb02aa5 (Set deadline for returning backend error); master merge for the same fix: 2257c1ecbe3c0cf71dd50b82752ae189c94ec905 (PR #71412). Pinned snapshot be1a908c6aa47e0ae1b1dc861a1de6ccfe963aa2 equals the v1.10.10 tag commit.",
+    "affected_range": "Kubernetes kube-apiserver through v1.10.10 on this line (CVE-2018-1002105 fixed in v1.10.11; other release lines fixed in 1.9.11/1.11.6/1.12.4/1.13.2).",
+    "finding_match_rule": "TP: report identifies the upgrade-aware proxy handling in kube-apiserver (UpgradeAwareHandler/tryUpgrade) that fails to validate/close non-upgrade or error backend responses, enabling requests to bypass path authorization, names CVE-2018-1002105, and attributes privilege escalation. Findings on unrelated apiserver RBAC or exec endpoints are not TP.",
+    "safe_reproduction_predicate": "Static predicate: v1.10.10 upgradeaware.go lacks getResponseCode/rawResponseCode != 101 checks present in 0535bcef. Dynamic reproduction: run a minimal kube-apiserver + backend in a disposable cluster, send an authenticated upgrade request to a backend that returns a non-101 response, and confirm the proxy behavior with no pod/namespace mutation.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2018-1002105",
+      "https://github.com/kubernetes/kubernetes/pull/71412",
+      "https://github.com/kubernetes/kubernetes/commit/0535bcef95a33855f0a722c8cd822c663fc6275e"
+    ]
+  }
+}

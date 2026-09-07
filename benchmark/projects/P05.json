@@ -1,0 +1,49 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P05",
+  "repository": "spring-projects/spring-framework",
+  "ecosystem": "Java",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2022-22965",
+    "cvss": 9.8,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "Spring4Shell data-binding path enabling remote code execution in affected deployments",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2022-22965"
+  },
+  "context_claim": {
+    "category": "risk_severity_policy",
+    "target_areas": [
+      "WebDataBinder property binding",
+      "request parameter binding"
+    ]
+  },
+  "snapshot": {
+    "archive": "spring-framework-03e695ad5ff998d8da9b89d163ec4f04747bd570.zip",
+    "root_directory": "spring-framework-03e695ad5ff998d8da9b89d163ec4f04747bd570",
+    "ref": "03e695ad5ff998d8da9b89d163ec4f04747bd570",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/spring-projects/spring-framework/archive/03e695ad5ff998d8da9b89d163ec4f04747bd570.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "spring-beans/src/main/java/org/springframework/beans/CachedIntrospectionResults.java"
+    ],
+    "entry_points": [
+      "CachedIntrospectionResults constructor / getPropertyDescriptors (lines ~287+) - PropertyDescriptor filtering that in the vulnerable version lets data binding reach non-bean properties such as getClass().classLoader",
+      "WebDataBinder property binding path uses these descriptors for request parameter binding"
+    ],
+    "fix_commit": "002546b3e4b8d791ea6acccb81eb3168f51abb15 (Refine PropertyDescriptor filtering; present in v5.3.18). Pinned snapshot 03e695ad5ff998d8da9b89d163ec4f04747bd570 equals the v5.3.17 tag commit.",
+    "affected_range": "Spring Framework 5.3.x through 5.3.17 (fixed 5.3.18); 5.2.x through 5.2.19 (fixed 5.2.20). Exploitable deployment requires JDK 9+, an affected WAR deployment on Tomcat, and default data binding.",
+    "finding_match_rule": "TP: report identifies the class/classLoader PropertyDescriptor exposure in CachedIntrospectionResults that data binding reaches through request parameters (e.g. class.module.classLoader), names CVE-2022-22965 (Spring4Shell), and attributes RCE in the required deployment. A report that only mentions CVE-2021-45046 or generic data binding is not TP.",
+    "safe_reproduction_predicate": "Static predicate: vulnerable snapshot lacks the descriptor filtering added by 002546b (return type / getClass checks). Dynamic reproduction in a disposable JDK9+ Tomcat WAR with logging set to write only into a temp directory and payload restricted to reading harmless properties; no file writes outside the sandbox.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2022-22965",
+      "https://spring.io/security/cve-2022-22965",
+      "https://github.com/spring-projects/spring-framework/commit/002546b3e4b8d791ea6acccb81eb3168f51abb15"
+    ]
+  }
+}

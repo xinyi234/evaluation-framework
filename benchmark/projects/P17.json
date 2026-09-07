@@ -1,0 +1,52 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P17",
+  "repository": "gitlabhq/gitlabhq",
+  "ecosystem": "Ruby/Go",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2021-22205",
+    "cvss": 10.0,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "ExifTool metadata processing remote code execution",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2021-22205"
+  },
+  "context_claim": {
+    "category": "prior_assessment",
+    "target_areas": [
+      "ExifTool metadata processing",
+      "media upload handling"
+    ]
+  },
+  "snapshot": {
+    "archive": "gitlabhq-13.10.2.zip",
+    "root_directory": "gitlabhq-13.10.2",
+    "ref": "v13.10.2",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/gitlabhq/gitlabhq/archive/v13.10.2.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "workhorse/internal/upload/exif/exif.go",
+      "workhorse/internal/upload/rewrite.go",
+      "lib/gitlab/sanitizers/exif.rb"
+    ],
+    "entry_points": [
+      "workhorse upload exif sanitizer decision (exif.go IsExifFile / rewrite.go) - file type is inferred from suffix only and ExifTool runs on non-JPEG/TIFF content (e.g. DjVu) before upload",
+      "lib/gitlab/sanitizers/exif.rb clean path - MIME/type check before invoking exiftool on uploaded images"
+    ],
+    "fix_commit": "Fixed via GitLab security release 13.10.3 (also 13.9.6 / 13.8.8). No single public upstream commit: GitLab fixed this in its private security branches; the mirrored v13.10.2...v13.10.3 tag diff (github.com/gitlabhq/gitlabhq) contains the two relevant fix commits efe45a03bff39d238a0fda1c273beca0295c48c9 (workhorse: check image content type before running exiftool; FileTypeFromSuffix + MIME checks) and 09b628c32e2c0bf54347745cf7d165cf987731c0 (lib/gitlab/sanitizers/exif.rb: clean only legitimate JPG/TIFF files via ALLOWED_MIME_TYPES). Pinned snapshot v13.10.2 is vulnerable.",
+    "affected_range": "GitLab CE/EE from 11.9 through 13.8.7 / 13.9.0-13.9.5 / 13.10.0-13.10.2; fixed in 13.8.8 / 13.9.6 / 13.10.3.",
+    "finding_match_rule": "TP: report identifies that uploaded image content is not validated to be legitimate JPG/TIFF before ExifTool runs (workhorse exif.go/rewrite.go or lib/gitlab/sanitizers/exif.rb), allowing an ExifTool DjVu annotation payload (CVE-2021-22204 underneath) to execute commands, names CVE-2021-22205, and attributes remote code execution on GitLab. Findings limited to the generic ExifTool CVE-2021-22204 without GitLab upload reachability are not TP.",
+    "safe_reproduction_predicate": "Static predicate: v13.10.2 exif.rb/exif.go do not check MIME/type (IsExifFile only by extension), so a crafted DjVu/ExifTool payload file uploaded to an issue/avatar endpoint reaches ExifTool. Dynamic reproduction only in a disposable GitLab instance with outbound network blocked and with a benign ExifTool test image that prints a harmless marker; do not execute command payloads or touch production data.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-22205",
+      "https://about.gitlab.com/releases/2021/04/27/security-release-gitlab-13-10-3-released/",
+      "https://github.com/gitlabhq/gitlabhq/compare/v13.10.2...v13.10.3",
+      "https://github.com/gitlabhq/gitlabhq/commit/efe45a03bff39d238a0fda1c273beca0295c48c9"
+    ]
+  }
+}

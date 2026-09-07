@@ -1,0 +1,51 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P19",
+  "repository": "apache/solr",
+  "ecosystem": "Java",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2019-17558",
+    "cvss": 8.1,
+    "severity": 3,
+    "severity_label": "High",
+    "impact": "VelocityResponseWriter template injection leading to remote code execution",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2019-17558"
+  },
+  "context_claim": {
+    "category": "deployment_reachability",
+    "target_areas": [
+      "VelocityResponseWriter",
+      "template rendering"
+    ]
+  },
+  "snapshot": {
+    "archive": "solr-releases-lucene-solr-8.3.0.zip",
+    "root_directory": "solr-releases-lucene-solr-8.3.0",
+    "ref": "releases/lucene-solr/8.3.0",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/apache/solr/archive/releases/lucene-solr/8.3.0.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "solr/contrib/velocity/src/java/org/apache/solr/response/SolrParamResourceLoader.java",
+      "solr/contrib/velocity/src/java/org/apache/solr/response/VelocityResponseWriter.java"
+    ],
+    "entry_points": [
+      "SolrParamResourceLoader.getResourceReader - serves templates from request parameters (params resource loader) when params.resource.loader.enabled is set",
+      "VelocityResponseWriter (config wt=velocity / v.template params) - renders attacker-supplied Velocity template code"
+    ],
+    "fix_commit": "Fixed in Apache Solr 8.4.0 (8.x line) and 7.7.2 (7.x line). Official 8.x commit: 128360856d50d7b39473644e6c1c21ba11766195 (SOLR-14025: VelocityResponseWriter hardening; removes SolrParamResourceLoader and only renders configset templates from trusted configsets). 7.7.x backport commits for the original vector: cbd17d1e83279c613e5e936c69993dc6ce70bc26 (SOLR-13971 patch for 7.7) and 5dad789154fbdc77c0a16d0febca7d63985325de (Committing the fix for SOLR-14025). Pinned snapshot releases/lucene-solr/8.3.0 is vulnerable.",
+    "affected_range": "Apache Solr 5.0.0 through 8.3.1 (fixed 8.4.0; 7.x fixed in 7.7.2); snapshot is 8.3.0.",
+    "finding_match_rule": "TP: report identifies the Velocity params resource loader (SolrParamResourceLoader / VelocityResponseWriter with params.resource.loader.enabled=true or v.template with a velocity/ configset template) as the code-execution sink, names CVE-2019-17558, and attributes unauthenticated (or low-privilege when auth enabled) remote code execution. Findings limited to other Solr RCEs (e.g. CVE-2019-0193) are not TP.",
+    "safe_reproduction_predicate": "Static predicate: snapshot contains SolrParamResourceLoader and a VelocityResponseWriter that renders request-parameter templates; 8.4.0 removes SolrParamResourceLoader. Dynamic reproduction: run snapshot Solr in a disposable container with a temp core and issue a wt=velocity request with a harmless template expression (arithmetic or marker output); no file writes/network payloads.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2019-17558",
+      "https://github.com/advisories/GHSA-ww97-9w65-2crx",
+      "https://issues.apache.org/jira/browse/SOLR-14025",
+      "https://github.com/apache/lucene-solr/commit/128360856d50d7b39473644e6c1c21ba11766195"
+    ]
+  }
+}

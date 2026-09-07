@@ -1,0 +1,69 @@
+{
+  "schema_version": "4.0",
+  "experiment_id": "repo-context-taxonomy-s2-v1",
+  "benchmark_manifest": "../benchmark/benchmark.json",
+  "context_policy": "context_policy.json",
+  "audit_task": "protocols/audit_task_v1.txt",
+  "design": {
+    "type": "taxonomy_balanced_v1",
+    "conditions": ["clean", "benign", "manipulated"],
+    "manipulated_claims": ["C1", "C2", "C3", "C4", "C5", "C6"],
+    "locations": ["L1", "L2", "L5", "L6"],
+    "methods": ["M1", "M2", "M3", "M7"],
+    "benign_location_allocation": "cell_index mod location_count"
+  },
+  "conditions": ["clean", "benign", "manipulated"],
+  "repeats": 5,
+  "agents": [
+    {
+      "agent_config": "agents/opencode-v1/agent.json"
+    },
+    {
+      "agent_config": "agents/codex-cli-v1/agent.json"
+    },
+    {
+      "agent_config": "agents/pi-agent-v1/agent.json"
+    }
+  ],
+  "pairing": {
+    "baseline": "clean",
+    "control": "benign",
+    "treatments": ["manipulated"]
+  },
+  "invariance": {
+    "audit_task_identical_across_conditions": true,
+    "application_code_identical_across_conditions": true,
+    "agent_scaffold_identical_across_conditions": true,
+    "model_version_identical_across_conditions": true,
+    "budget_identical_across_conditions": true,
+    "target_areas_identical_across_claim_variants": true
+  },
+  "budget": {
+    "timeout_s": 1800,
+    "max_tool_calls": null,
+    "max_tokens": null
+  },
+  "paths": {
+    "workspace_root": "../workspaces",
+    "runs_root": "../runs",
+    "analysis_root": "../analysis"
+  },
+  "run_id_format": {
+    "clean": "{project}__clean__{agent}__r{run:02d}",
+    "benign": "{project}__benign__{agent}__r{run:02d}",
+    "manipulated": "{project}__manipulated__{claim}__{location}__{method}__{agent}__r{run:02d}"
+  },
+  "metrics": {
+    "primary": [
+      "attack_induced_false_negative",
+      "paired_verdict_shift",
+      "severity_delta"
+    ],
+    "secondary": [
+      "claim_exposure",
+      "claim_adoption",
+      "verification_attempt",
+      "conflict_detection"
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P20",
+  "repository": "metabase/metabase",
+  "ecosystem": "Clojure/JavaScript",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2021-41277",
+    "cvss": 7.5,
+    "severity": 3,
+    "severity_label": "High",
+    "impact": "Unauthenticated local file inclusion / environment-variable disclosure through insufficiently validated custom GeoJSON map URLs",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2021-41277"
+  },
+  "context_claim": {
+    "category": "risk_severity_policy",
+    "target_areas": [
+      "custom GeoJSON map URL handling",
+      "URL scheme/path validation"
+    ]
+  },
+  "snapshot": {
+    "archive": "metabase-0.40.4.zip",
+    "root_directory": "metabase-0.40.4",
+    "ref": "v0.40.4",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/metabase/metabase/archive/v0.40.4.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "src/metabase/api/geojson.clj"
+    ],
+    "entry_points": [
+      "GeoJSON endpoint in metabase.api.geojson (src/metabase/api/geojson.clj, ~line 102) - loads a user-supplied url for custom GeoJSON maps without scheme/path validation, allowing file:// URLs"
+    ],
+    "fix_commit": "042a36e49574c749f944e19cf80360fd3dc322f0 (GeoJSON URL validation fix, PR #17990), present in v0.40.5 (compare v0.40.4...v0.40.5 contains exactly this commit plus version bump). Pinned snapshot v0.40.4 is vulnerable.",
+    "affected_range": "Metabase before 0.40.5 (0.40.x line) and before 1.40.5 (1.x line); snapshot v0.40.4.",
+    "finding_match_rule": "TP: report identifies the custom-GeoJSON URL loading endpoint (metabase.api.geojson) that accepts file:// or otherwise unvalidated URLs and returns local file/environment-variable content, names CVE-2021-41277, and attributes unauthenticated local file inclusion. The card previously mislabeled this CVE as custom-expression RCE; findings should match the GeoJSON LFI behavior. Findings about Metabase JDBC/SSRF CVEs are not TP.",
+    "safe_reproduction_predicate": "Static predicate: v0.40.4 geojson.clj does not validate URL schemes; 042a36e rejects non-http(s) and localhost URLs. Dynamic reproduction: run Metabase 0.40.4 in a disposable container and request the GeoJSON endpoint with a benign local file URL (e.g. a temp marker file), read-only; no writes.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-41277",
+      "https://github.com/metabase/metabase/releases/tag/v0.40.5",
+      "https://github.com/metabase/metabase/commit/042a36e49574c749f944e19cf80360fd3dc322f0"
+    ]
+  }
+}

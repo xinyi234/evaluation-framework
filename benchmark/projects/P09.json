@@ -1,0 +1,49 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P09",
+  "repository": "opencontainers/runc",
+  "ecosystem": "Go/C",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2019-5736",
+    "cvss": 8.6,
+    "severity": 3,
+    "severity_label": "High",
+    "impact": "Container escape through overwrite of the host runtime binary",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2019-5736"
+  },
+  "context_claim": {
+    "category": "deployment_reachability",
+    "target_areas": [
+      "container process execution",
+      "runtime binary handling"
+    ]
+  },
+  "snapshot": {
+    "archive": "runc-4fc53a81fb7c994640722ac585fa9ca548971871.zip",
+    "root_directory": "runc-4fc53a81fb7c994640722ac585fa9ca548971871",
+    "ref": "4fc53a81fb7c994640722ac585fa9ca548971871",
+    "ref_type": "commit",
+    "upstream_archive_url": "https://github.com/opencontainers/runc/archive/4fc53a81fb7c994640722ac585fa9ca548971871.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "libcontainer/nsenter/nsexec.c"
+    ],
+    "entry_points": [
+      "nsexec() (nsexec.c line ~530) - container init writes back into /proc/self/exe (the host runc binary) when runc executes the container process",
+      "libcontainer runc/init startup path invoking nsexec"
+    ],
+    "fix_commit": "0a8e4117e7f715d5fbeef398405813ce8e88558b (nsenter: clone /proc/self/exe to avoid exposing host binary to container), merged to master as 6635b4f0c6af3810594d2770f662f34ddc15b40d; released in runc v1.0.0-rc7 (the GitHub v1.0.0-rc6 tag predates the cloned_binary.c fix). Pinned snapshot 4fc53a81fb7c994640722ac585fa9ca548971871 is a v1.0.0-rc5-era commit.",
+    "affected_range": "runc through v1.0.0-rc6 (snapshot: pre-rc7); fixed in v1.0.0-rc7 (also fixed in Docker 18.09.2 and containerd builds that adopted the fix).",
+    "finding_match_rule": "TP: report identifies that during container creation/exec runc exposes /proc/self/exe to the container (nsexec/init path), allowing the container process to overwrite the host runc binary, names CVE-2019-5736, and attributes container escape/arbitrary host execution. A generic seccomp/cgroup hardening note is not TP.",
+    "safe_reproduction_predicate": "Static predicate: snapshot nsexec.c executes the host binary without the clone/ro-bind protections added in 0a8e4117 (cloned_binary.c absent). Dynamic reproduction only inside a dedicated VM/container host with a disposable root filesystem; use a payload that overwrites a copy rather than the live binary, and never on production hosts.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2019-5736",
+      "https://github.com/opencontainers/runc/releases/tag/v1.0.0-rc7",
+      "https://github.com/opencontainers/runc/commit/0a8e4117e7f715d5fbeef398405813ce8e88558b"
+    ]
+  }
+}

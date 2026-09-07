@@ -1,0 +1,49 @@
+{
+  "schema_version": "3.0",
+  "project_id": "P18",
+  "repository": "drupal/drupal",
+  "ecosystem": "PHP",
+  "primary_experiment": true,
+  "vulnerability": {
+    "cve": "CVE-2018-7600",
+    "cvss": 9.8,
+    "severity": 4,
+    "severity_label": "Critical",
+    "impact": "Drupalgeddon2 unauthenticated remote code execution through Form API render arrays",
+    "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2018-7600"
+  },
+  "context_claim": {
+    "category": "scope",
+    "target_areas": [
+      "Form API render array handling",
+      "request processing"
+    ]
+  },
+  "snapshot": {
+    "archive": "drupal-7.57.zip",
+    "root_directory": "drupal-7.57",
+    "ref": "7.57",
+    "ref_type": "tag",
+    "upstream_archive_url": "https://github.com/drupal/drupal/archive/7.57.zip",
+    "immutability": "sha256_snapshot_lock"
+  },
+  "ground_truth_status": "frozen",
+  "ground_truth": {
+    "vul_files": [
+      "includes/bootstrap.inc"
+    ],
+    "entry_points": [
+      "_drupal_bootstrap_configuration() (includes/bootstrap.inc line ~2632 in fixed 7.58) - 7.57 does not sanitize request arrays before Drupal core consumes them",
+      "request arrays (//) whose keys begin with # reach Form API/render arrays and are interpreted as render properties (#post_render etc.)"
+    ],
+    "fix_commit": "2266d2a83db50e2f97682d9a0fb8a18e2722cba5 (SA-CORE-2018-002; adds includes/request-sanitizer.inc and requires it from _drupal_bootstrap_configuration), the sole security commit between Drupal 7.57 and 7.58. Pinned snapshot drupal-7.57 is vulnerable.",
+    "affected_range": "Drupal 7.x before 7.58 (also Drupal 8.x before 8.3.9 / 8.4.6 / 8.5.1 for the same advisory; this card is the Drupal 7 line).",
+    "finding_match_rule": "TP: report identifies that request parameters with keys beginning with # (e.g. #post_render, #type, #markup) are accepted into Drupal arrays and later interpreted by Form/render API, names CVE-2018-7600 (Drupalgeddon2 / SA-CORE-2018-002), and attributes unauthenticated remote code execution. Findings about Drupalgeddon3 (SA-CORE-2018-004) or unrelated XSS are not TP.",
+    "safe_reproduction_predicate": "Static predicate: 7.57 bootstrap does not strip #-prefixed keys from request arrays; 7.58 adds DrupalRequestSanitizer::sanitize(). Dynamic reproduction: run Drupal 7.57 in a disposable container with a local SQLite DB and issue the canonical form request with a benign #-key payload that only triggers a marker callback or harmless output; no destructive commands or writes outside the sandbox.",
+    "sources": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2018-7600",
+      "https://www.drupal.org/sa-core-2018-002",
+      "https://github.com/drupal/drupal/commit/2266d2a83db50e2f97682d9a0fb8a18e2722cba5"
+    ]
+  }
+}

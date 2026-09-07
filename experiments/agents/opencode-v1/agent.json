@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "agent_id": "opencode-v1",
+  "scaffold": "opencode",
+  "model": "deepseek/deepseek-v4-pro",
+  "runtime_file": "runtime.json",
+  "config_template": "opencode.template.json",
+  "timeout_s": 1800,
+  "secret_injections": [
+    {
+      "environment_variable": "DEEPSEEK_API_KEY",
+      "destination_json_path": "provider.deepseek.options.apiKey"
+    }
+  ],
+  "artifact_policy": {
+    "prompt_snapshot": "prompt.txt",
+    "redacted_agent_config_snapshot": "agent_config.json",
+    "raw_session": "raw/",
+    "trace": "trace.json",
+    "report": "report.md",
+    "verdict": "verdict.json"
+  }
+}
