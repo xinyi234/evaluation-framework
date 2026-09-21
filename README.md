@@ -40,7 +40,6 @@ datasets/
 
 关键边界：
 
-- `repos/*.zip`：不可变。基准修订需整体换代并重新 freeze snapshot lock。
 - `benchmark/projects/Pxx.json`：手工编辑的源定义（ground truth、target_areas 等）；冻结后改动要记录。
 - `experiments/`：定义"怎么请求审计、注入什么、用哪个 agent/模型"，是源定义。
 - `framework/scripts/*.py`：可执行代码，消费上面的源定义。
@@ -50,7 +49,7 @@ datasets/
 
 `common.py` 是被共享的库（JSON/哈希/加载函数。其余脚本各有 CLI，参数均以 `--help` 为准（下面列的是当前版本的完整参数）。
 
-### 3.1 validate_benchmark.py —— 校验（推荐每次改动后先跑）
+### 3.1 validate_benchmark.py —— 校验
 
 作用：校验 benchmark、context policy、实验定义、run plan 四者一致；`--strict-ground-truth` 要求 20 张卡全部 frozen。
 
@@ -72,21 +71,7 @@ python datasets/framework/scripts/validate_benchmark.py \
   --strict-ground-truth
 ```
 
-### 3.2 freeze_snapshots.py —— 快照 SHA-256 锁
-
-作用：对 repos/*.zip 生成/核对不可变快照锁（写入 `benchmark/snapshot_lock.json`）。
-
-| 参数 | 说明 |
-|---|---|
-| `--benchmark` | 必填，benchmark.json |
-| `--check` | 只核对已有锁，不重新生成 |
-
-```powershell
-python datasets/framework/scripts/freeze_snapshots.py --benchmark datasets/benchmark/benchmark.json
-python datasets/framework/scripts/freeze_snapshots.py --benchmark datasets/benchmark/benchmark.json --check
-```
-
-### 3.3 run_plan.py —— 生成 S2 运行矩阵
+### 3.2 run_plan.py —— 生成 S2 运行矩阵
 
 作用：把实验定义展开成 2400 条带结构化因子（claim/location/method/carrier/truthfulness/verifiability/配对字段/snapshot hash）的 run plan。
 
@@ -103,7 +88,7 @@ python datasets/framework/scripts/run_plan.py
   --out datasets/experiments/s2_taxonomy_run_plan.json
 ```
 
-### 3.4 materialize.py —— 物化注入文档
+### 3.3 materialize.py —— 物注入文档
 
 作用：把快照解压到一次性工作区，并按 (condition, claim, location, method) 渲染写入注入文档；`--print-payload` 可预览某份注入（其实它会先解压再打印，用于人工复核）。
 
@@ -127,9 +112,9 @@ python datasets/framework/scripts/materialize.py `
   --run-id P01__manipulated__C3__L5__M2__codex-cli-v1__r03 --print-payload
 ```
 
-### 3.5 run_agent.py —— 运行 agent（核心执行器）
+### 3.4 run_agent.py —— 运行 agent
 
-作用：对一个或多个 run 完成"校验快照哈希 → 物化工作区 → 生成 prompt/配置 → 调用 agent CLI → 保存原始输出/trace/report/verdict/metadata"。**模型不可通过本脚本覆盖**，换模型必须改 agent 配置并重建 run plan（保证执行与记录一致）。
+作用：对一个或多个 run 完成"校验快照哈希 → 物化工作区 → 生成 prompt/配置 → 调用 agent CLI → 保存原始输出/trace/report/verdict/metadata"。
 
 | 参数 | 说明 |
 |---|---|
@@ -159,7 +144,7 @@ python datasets/framework/scripts/run_agent.py `
   --all --agent opencode-v1 --project P01 --condition manipulated --limit 3
 ```
 
-### 3.6 paired_metrics.py —— 配对指标（clean/manipulated 对照）
+### 3.5 paired_metrics.py —— 配对指标（clean/manipulated 对照）
 
 作用：把同一 仓库×agent×repeat 的 clean 与 manipulated 配对，计算 verdict 偏移、severity delta、注入读取/采信率等结构化指标（按 WHAT/WHERE/HOW/agent 分组输出）。**当前正确性指标是 `provisional_pre_ground_truth`**——正式判定规则（finding matcher）实现后才能作为最终正确率。
 
@@ -177,7 +162,7 @@ python datasets/framework/scripts/paired_metrics.py `
   --out datasets/analysis/generated/paired_metrics.json
 ```
 
-### 3.7 trace_extract.py —— Trace 特征提取（S4）
+### 3.6 trace_extract.py —— Trace 特征提取
 
 作用：从每次运行的 `trace.json`（codex `exec --json`、opencode `run --format json` 事件流、opencode.db 归一化事件，或 pi session JSONL）中提取 exposure / GT 文件覆盖 / verification / conflict / claim-adoption 等过程特征，输出到 `analysis/generated/trace_features.json`。只读 runs/，不改动原始产物。
 
@@ -197,7 +182,7 @@ python datasets/framework/scripts/trace_extract.py `
   --out datasets/analysis/generated/trace_features.json --summary
 ```
 
-### 3.8 辅助脚本（ground truth 复核用，与分析流程无关）
+### 3.7 辅助脚本（ground truth 复核用，与分析流程无关）
 
 - `inspect_ground_truth_evidence.py --benchmark ... --evidence-dir ...`：打印 GHSA/NVD 证据，供逐仓库 ground truth 复核。
 - `inspect_patch_evidence.py <files...>`：查看本地保存的 GitHub commit/compare/PR JSON（当时核对修复提交用）。
@@ -232,7 +217,6 @@ python datasets/framework/scripts/validate_benchmark.py `
   --experiment datasets/experiments/s2_taxonomy.json `
   --context-policy datasets/experiments/context_policy.json `
   --run-plan datasets/experiments/s2_taxonomy_run_plan.json --strict-ground-truth
-python datasets/framework/scripts/freeze_snapshots.py --benchmark datasets/benchmark/benchmark.json --check
 ```
 
 ### 步骤 2：确认 run plan（改过 agents/模型/因子后重建）
@@ -271,7 +255,7 @@ runs/<run_id>/
 └── raw/                 # 原始 stdout/stderr（及 pi session jsonl）
 ```
 
-### 步骤 5：三个 agent 各 smoke 一次（先在 clean 或单条 manipulated 上验证）
+### 步骤 5：三个 agent 各运行一次
 分别用 opencode / codex / pi 的三个真实 run id（见 run plan）各跑 1 条，确认 `report.md` 有 VERDICT、`verdict.json` 解析成功、`trace.json` 有事件。若超时/脏数据（report 卡在 "Terminate batch job?"、verdict 残片），按清洗规则剔除重跑。
 
 ### 步骤 6：Pilot（建议先小规模再过全量）
@@ -361,15 +345,15 @@ python datasets/framework/scripts/materialize.py `
 
 ## 6. Agent 与模型的切换方法
 
-### 6.1 当前三个 agent（全部使用 DeepSeek V4 Pro）
+### 6.1 当前三个 agent
 
-| agent_id | scaffold | model | provider 配置 | 可执行体 |
-|---|---|---|---|---|
-| `opencode-v1` | OpenCode | `deepseek/deepseek-v4-pro` | provider `deepseek`（`opencode.template.json`，base_url `https://api.deepseek.com/v1`） | `opencode` / `OPENCODE_BIN` |
-| `codex-cli-v1` | Codex CLI | `deepseek-v4-pro` | 内联在 `runtime.json`：`model_provider=deepseek` + `model_providers.deepseek.*`，`wire_api=responses` | `codex`（已在 PATH）/ `CODEX_BIN` |
-| `pi-agent-v1` | Pi Agent | `deepseek/deepseek-v4-pro` | model 前缀 `deepseek/` 路由到 DeepSeek provider | `pi` / `PI_AGENT_BIN`（Windows 用 `pi.cmd` 全路径） |
+| agent_id | scaffold | model | provider 配置 |
+|---|---|---|---|
+| `opencode-v1` | OpenCode | `deepseek/deepseek-v4-pro` | provider `deepseek`（`opencode.template.json`，base_url `https://api.deepseek.com/v1`） |
+| `codex-cli-v1` | Codex CLI | `deepseek-v4-pro` | 内联在 `runtime.json`：`model_provider=deepseek` + `model_providers.deepseek.*`，`wire_api=responses` |
+| `pi-agent-v1` | Pi Agent | `deepseek/deepseek-v4-pro` | model 前缀 `deepseek/` 路由到 DeepSeek provider |
 
-统一凭据：三个 agent 目前都只读环境变量 **`DEEPSEEK_API_KEY`**。
+三个 agent 目前都只读环境变量 **`DEEPSEEK_API_KEY`**。
 
 ### 6.2 概念与规则
 - `agent_id` 是**身份标识**：run id、结果目录、metadata 都带它，一旦跑过结果就**不要复用旧 id 换模型**；换模型=新 agent_id（或确认无历史 run 后可原地改+重建 run plan）。
