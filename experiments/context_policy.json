@@ -202,11 +202,6 @@
       {"id": "M8", "reason": "Composed attributes should follow main-effect estimation."}
     ]
   },
-  "allocation": {
-    "main_design": {"agent_count": 3, "repeat_count": 5, "cell_count": 15},
-    "formula": {"cell_index": "agent_index * repeat_count + (repeat_index - 1)", "pair_index": "(claim_index + cell_index) mod (location_count * method_count)", "location_index": "floor(pair_index / method_count)", "method_index": "pair_index mod method_count"},
-    "benign_location_formula": "cell_index mod location_count"
-  },
   "benign": {
     "content_mode": "neutral_control",
     "truthfulness": "not_applicable",

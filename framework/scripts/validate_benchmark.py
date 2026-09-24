@@ -6,6 +6,14 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from common import load_agents, load_benchmark, load_json, sha256, snapshot_path
+from design import (
+    ALLOCATION_ALGORITHM,
+    DESIGN_TYPE,
+    SCHEDULE_ALGORITHM,
+    assigned_cell,
+    numeric_rank,
+    schedule_key
+)
 
 
 REQUIRED_SNAPSHOT_FIELDS = [
@@ -236,14 +244,6 @@ def validate_context_policy(policy):
         if BENIGN_FORBIDDEN_RE.search(template):
             errors.append(f"benign template {location_id} contains security or grounding guidance")
 
-    allocation = policy.get("allocation", {})
-    formula = allocation.get("formula", {})
-    required_formula_fields = {"cell_index", "pair_index", "location_index", "method_index"}
-    if not required_formula_fields.issubset(formula):
-        errors.append("context policy allocation formula is incomplete")
-    if not allocation.get("benign_location_formula"):
-        errors.append("context policy benign location formula is missing")
-
     required_constraints = {
         "one_atomic_security_item_per_manipulated_variant",
         "one_non_executable_carrier_per_manipulated_variant",
@@ -264,8 +264,8 @@ def validate_experiment(experiment, policy, agents, project_count):
         errors.append("experiment schema_version must be 4.0")
         return errors
     design = experiment.get("design", {})
-    if design.get("type") != "taxonomy_balanced_v1":
-        errors.append("experiment design.type must be taxonomy_balanced_v1")
+    if design.get("type") != DESIGN_TYPE:
+        errors.append(f"experiment design.type must be {DESIGN_TYPE}")
     if design.get("manipulated_claims") != policy.get("main_levels", {}).get("claims"):
         errors.append("experiment manipulated claims do not match context policy")
     if design.get("locations") != policy.get("main_levels", {}).get("locations"):
@@ -314,17 +314,58 @@ def validate_experiment(experiment, policy, agents, project_count):
         errors.append("pairing control must be benign")
     if experiment.get("pairing", {}).get("treatments") != ["manipulated"]:
         errors.append("pairing treatment must be manipulated")
+    if experiment.get("pairing", {}).get("control_location_matched") is not True:
+        errors.append("pairing must use location-matched benign controls")
     for key, value in experiment.get("invariance", {}).items():
         if value is not True:
             errors.append(f"invariance.{key} must be true")
 
-    expected_agents = policy.get("allocation", {}).get("main_design", {}).get("agent_count")
-    if expected_agents is not None and len(agents) != expected_agents:
-        errors.append(f"allocation expects {expected_agents} agents, found {len(agents)}")
-    expected_repeats = policy.get("allocation", {}).get("main_design", {}).get("repeat_count")
-    if expected_repeats is not None and experiment.get("repeats") != expected_repeats:
-        errors.append(f"allocation expects {expected_repeats} repeats")
+    allocation = design.get("allocation", {})
+    if allocation.get("algorithm") != ALLOCATION_ALGORITHM:
+        errors.append(f"allocation algorithm must be {ALLOCATION_ALGORITHM}")
+    if not isinstance(allocation.get("seed"), str) or not allocation["seed"]:
+        errors.append("allocation seed must be a non-empty string")
+    requirements = allocation.get("balance_requirements", {})
+    if requirements.get("unique_cells_per_project_claim") != 15:
+        errors.append("allocation must require 15 unique cells per project and claim")
+    if requirements.get("per_agent_claim_cell_count_min") != 6 \
+            or requirements.get("per_agent_claim_cell_count_max") != 7:
+        errors.append("allocation must require per-agent/claim cell counts of 6-7")
+    schedule = design.get("execution_schedule", {})
+    if schedule.get("algorithm") != SCHEDULE_ALGORITHM:
+        errors.append(f"execution schedule algorithm must be {SCHEDULE_ALGORITHM}")
+    if not isinstance(schedule.get("seed"), str) or not schedule["seed"]:
+        errors.append("execution schedule seed must be a non-empty string")
+    if design.get("benign_locations") != "all":
+        errors.append("design must materialize benign controls at all locations")
     return errors
+
+
+def treatment_design_row(run, project_ids, agent_ids, claims, locations, methods, repeats):
+    project_id = run["project_id"]
+    agent_id = run["agent_id"]
+    claim_id = run["claim"]
+    location_id = run["location"]
+    method_id = run["method"]
+    repeat = run["run"]
+    row = [1.0]
+    row.extend(float(project_id == value) for value in project_ids[1:])
+    row.extend(float(agent_id == value) for value in agent_ids[1:])
+    row.extend(float(claim_id == value) for value in claims[1:])
+    row.extend(float(location_id == value) for value in locations[1:])
+    row.extend(float(method_id == value) for value in methods[1:])
+    row.extend(float(repeat == value) for value in range(2, repeats + 1))
+    row.extend(
+        float(agent_id == agent and location_id == location)
+        for agent in agent_ids[1:]
+        for location in locations[1:]
+    )
+    row.extend(
+        float(agent_id == agent and method_id == method)
+        for agent in agent_ids[1:]
+        for method in methods[1:]
+    )
+    return row
 
 
 def validate_run_plan(plan, experiment, policy, projects, agents):
@@ -336,32 +377,50 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
         errors.append("run-plan experiment_id mismatch")
     if plan.get("design_type") != experiment.get("design", {}).get("type"):
         errors.append("run-plan design type mismatch")
+    plan_allocation = plan.get("allocation", {})
+    for field in ("algorithm", "seed", "position_formula", "cell_order_formula"):
+        if plan_allocation.get(field) != experiment["design"]["allocation"].get(field):
+            errors.append(f"run-plan allocation {field} mismatch")
+    if plan_allocation.get("execution_schedule") != experiment["design"].get("execution_schedule"):
+        errors.append("run-plan execution schedule metadata mismatch")
+    if plan_allocation.get("benign_locations") != experiment["design"].get("locations"):
+        errors.append("run-plan benign location metadata mismatch")
 
+    design = experiment["design"]
+    claims = design["manipulated_claims"]
+    locations = design["locations"]
+    methods = design["methods"]
     runs = plan.get("runs", [])
     expected_runs = len(projects) * len(agents) * experiment["repeats"] * (
-        2 + len(experiment["design"]["manipulated_claims"])
+        1 + len(locations) + len(claims)
     )
     if len(runs) != expected_runs:
         errors.append(f"run-plan expected {expected_runs} runs, found {len(runs)}")
     run_ids = [run.get("run_id") for run in runs]
     if len(set(run_ids)) != len(run_ids):
         errors.append("run plan has duplicate run IDs")
+    schedule_orders = [run.get("schedule_order") for run in runs]
+    if not all(isinstance(value, int) for value in schedule_orders):
+        errors.append("run plan schedule_order values must be integers")
+    elif sorted(schedule_orders) != list(range(1, len(runs) + 1)):
+        errors.append("run plan schedule_order must be a complete 1-based sequence")
+    elif schedule_orders != list(range(1, len(runs) + 1)):
+        errors.append("run plan rows must be sorted by schedule_order")
+    if any(run.get("schedule_key") != schedule_key(design, run.get("run_id")) for run in runs):
+        errors.append("run plan schedule keys do not match the frozen schedule seed")
 
     conditions = Counter(run.get("condition") for run in runs)
     expected_conditions = {
         "clean": len(projects) * len(agents) * experiment["repeats"],
-        "benign": len(projects) * len(agents) * experiment["repeats"],
+        "benign": len(projects) * len(agents) * experiment["repeats"] * len(locations),
         "manipulated": (
             len(projects) * len(agents) * experiment["repeats"]
-            * len(experiment["design"]["manipulated_claims"])
+            * len(claims)
         )
     }
     if dict(conditions) != expected_conditions:
         errors.append(f"run-plan condition counts mismatch: {dict(conditions)}")
 
-    claims = experiment["design"]["manipulated_claims"]
-    locations = experiment["design"]["locations"]
-    methods = experiment["design"]["methods"]
     agent_ids = [agent["agent_id"] for agent in agents]
     groups = defaultdict(list)
     by_run_id = {run.get("run_id"): run for run in runs}
@@ -372,8 +431,13 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
             "scaffold", "model", "agent_config", "run", "timeout_s", "audit_task",
             "context_policy", "workspace_dir", "artifact_dir", "pair_key",
             "snapshot_archive", "snapshot_sha256", "claim", "claim_category",
-            "location", "method", "carrier", "truthfulness", "verifiability",
-            "context_variant_id"
+            "content_mode", "intended_goal", "location", "method", "carrier",
+            "carrier_family", "document_role", "artifact_format", "asserted_source",
+            "method_attributes", "truthfulness", "factual_status", "rule_authority",
+            "rule_applicability", "evidence_relation", "evidence_reference",
+            "required_evidence", "agent_evidence_access", "verifiability",
+            "primary_analysis_eligible", "context_variant_id", "project_index",
+            "agent_index", "repeat_index", "schedule_key", "schedule_order"
         }
         missing = required - set(run)
         if missing:
@@ -389,6 +453,25 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
                 errors.append(f"{run['run_id']}: invalid benign location")
             elif run["carrier"] != policy["locations"][run["location"]]["carrier"]:
                 errors.append(f"{run['run_id']}: benign carrier mismatch")
+            benign = policy["benign"]
+            location = policy["locations"].get(run["location"], {})
+            expected = {
+                "content_mode": benign.get("content_mode"),
+                "carrier_family": location.get("carrier_family"),
+                "document_role": location.get("document_role"),
+                "artifact_format": location.get("artifact_format"),
+                "asserted_source": location.get("asserted_source"),
+                "truthfulness": benign.get("truthfulness"),
+                "factual_status": benign.get("factual_status"),
+                "rule_authority": benign.get("rule_authority"),
+                "rule_applicability": benign.get("rule_applicability"),
+                "evidence_relation": benign.get("evidence_relation"),
+                "agent_evidence_access": benign.get("agent_evidence_access"),
+                "verifiability": benign.get("verifiability")
+            }
+            for field, value in expected.items():
+                if run.get(field) != value:
+                    errors.append(f"{run['run_id']}: benign {field} mismatch")
         elif run["condition"] == "manipulated":
             if run["claim"] not in claims:
                 errors.append(f"{run['run_id']}: invalid claim")
@@ -398,6 +481,7 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
                 errors.append(f"{run['run_id']}: invalid method")
             claim = policy["claim_categories"].get(run["claim"], {})
             location = policy["locations"].get(run["location"], {})
+            method = policy["methods"].get(run["method"], {})
             if run["claim_category"] != claim.get("name"):
                 errors.append(f"{run['run_id']}: claim category mismatch")
             if run["carrier"] != location.get("carrier"):
@@ -406,82 +490,163 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
                 errors.append(f"{run['run_id']}: truthfulness mismatch")
             if run["verifiability"] != claim.get("verifiability"):
                 errors.append(f"{run['run_id']}: verifiability mismatch")
+            expected = {
+                "content_mode": claim.get("content_mode"),
+                "intended_goal": claim.get("intended_goal"),
+                "carrier_family": location.get("carrier_family"),
+                "document_role": location.get("document_role"),
+                "artifact_format": location.get("artifact_format"),
+                "asserted_source": location.get("asserted_source"),
+                "method_attributes": method.get("attributes"),
+                "factual_status": claim.get("factual_status"),
+                "rule_authority": claim.get("rule_authority"),
+                "rule_applicability": claim.get("rule_applicability"),
+                "evidence_relation": claim.get("evidence_relation"),
+                "evidence_reference": claim.get("evidence_reference"),
+                "required_evidence": claim.get("required_evidence"),
+                "agent_evidence_access": claim.get("agent_evidence_access"),
+                "primary_analysis_eligible": claim.get("primary_analysis_eligible")
+            }
+            for field, value in expected.items():
+                if run.get(field) != value:
+                    errors.append(f"{run['run_id']}: {field} mismatch")
         else:
             errors.append(f"{run['run_id']}: invalid condition")
         groups[(run["project_id"], run["agent_id"], run["run"])].append(run)
 
-    project_ids = {card["project_id"] for card in projects}
+    project_ids = [card["project_id"] for card in projects]
+    project_id_set = set(project_ids)
     for key, group in groups.items():
         project_id, agent_id, repeat = key
-        if project_id not in project_ids or agent_id not in agent_ids or repeat not in range(1, experiment["repeats"] + 1):
+        if project_id not in project_id_set or agent_id not in agent_ids \
+                or repeat not in range(1, experiment["repeats"] + 1):
             errors.append(f"invalid pair group: {key}")
             continue
         group_conditions = Counter(run["condition"] for run in group)
-        if group_conditions.get("clean", 0) != 1 or group_conditions.get("benign", 0) != 1:
-            errors.append(f"{key}: expected exactly one clean and one benign run")
+        if group_conditions.get("clean", 0) != 1 \
+                or group_conditions.get("benign", 0) != len(locations):
+            errors.append(
+                f"{key}: expected one clean and one benign run per location"
+            )
         manipulated = [run for run in group if run["condition"] == "manipulated"]
         if Counter(run["claim"] for run in manipulated) != Counter(claims):
             errors.append(f"{key}: manipulated claims are incomplete or duplicated")
 
         clean = next((run for run in group if run["condition"] == "clean"), None)
-        benign = next((run for run in group if run["condition"] == "benign"), None)
-        if clean and benign:
-            if any(run.get("baseline_run_id") != clean["run_id"] for run in group if run["condition"] != "clean"):
-                errors.append(f"{key}: baseline run ID mismatch")
-            if any(run.get("control_run_id") != benign["run_id"] for run in manipulated):
-                errors.append(f"{key}: control run ID mismatch")
+        benign_runs = [run for run in group if run["condition"] == "benign"]
+        benign_by_location = {run["location"]: run for run in benign_runs}
+        if Counter(run["location"] for run in benign_runs) != Counter(locations):
+            errors.append(f"{key}: benign locations are incomplete or duplicated")
+        if clean and len(benign_by_location) == len(locations):
             if len({run["snapshot_sha256"] for run in group}) != 1:
                 errors.append(f"{key}: snapshot hash differs across paired conditions")
+            if any(run.get("baseline_run_id") != clean["run_id"] for run in group if run["condition"] != "clean"):
+                errors.append(f"{key}: baseline run ID mismatch")
+            if any(
+                run.get("control_run_id") != benign_by_location[run["location"]]["run_id"]
+                for run in manipulated
+            ):
+                errors.append(f"{key}: location-matched control run ID mismatch")
+            project_index = project_ids.index(project_id)
             agent_index = agent_ids.index(agent_id)
-            cell_index = agent_index * experiment["repeats"] + (repeat - 1)
-            expected_benign_location = locations[cell_index % len(locations)]
-            if benign["location"] != expected_benign_location:
-                errors.append(f"{key}: benign location allocation mismatch")
+            repeat_index = repeat - 1
+            for item in group:
+                if item.get("project_index") != project_index \
+                        or item.get("agent_index") != agent_index \
+                        or item.get("repeat_index") != repeat_index:
+                    errors.append(f"{item['run_id']}: block index mismatch")
             for run in manipulated:
-                claim_index = claims.index(run["claim"])
-                pair_index = (claim_index + cell_index) % (len(locations) * len(methods))
-                expected_location = locations[pair_index // len(methods)]
-                expected_method = methods[pair_index % len(methods)]
-                if run["location"] != expected_location or run["method"] != expected_method:
+                assignment = assigned_cell(
+                    design,
+                    run["claim"],
+                    project_index,
+                    agent_index,
+                    repeat_index,
+                    experiment["repeats"]
+                )
+                if run["location"] != assignment["location"] \
+                        or run["method"] != assignment["method"]:
                     errors.append(f"{run['run_id']}: WHERE/HOW allocation mismatch")
+                if run.get("allocation_position") != assignment["allocation_position"]:
+                    errors.append(f"{run['run_id']}: allocation position mismatch")
+                if run.get("cell_order_hash") != assignment["cell_order_hash"]:
+                    errors.append(f"{run['run_id']}: cell order hash mismatch")
         for run_id in [run.get("baseline_run_id") for run in group if run.get("baseline_run_id")] + [run.get("control_run_id") for run in group if run.get("control_run_id")]:
             if run_id not in by_run_id:
                 errors.append(f"{key}: referenced run missing: {run_id}")
 
-    # Balance checks are per repository, avoiding repository-level confounding.
+    manipulated_runs = [run for run in runs if run["condition"] == "manipulated"]
+    all_cells = {(location, method) for location in locations for method in methods}
+
+    # Every project/claim block contains 15 distinct cells; the omitted cell
+    # rotates by project instead of being permanently tied to an agent.
     for project_id in project_ids:
         project_runs = [run for run in runs if run["project_id"] == project_id]
-        manipulated_runs = [run for run in project_runs if run["condition"] == "manipulated"]
-        pair_counts = Counter((run["location"], run["method"]) for run in manipulated_runs)
-        if set(pair_counts) != set((location, method) for location in locations for method in methods):
-            errors.append(f"{project_id}: WHERE × HOW grid is incomplete")
-        elif min(pair_counts.values()) < 5 or max(pair_counts.values()) > 6:
-            errors.append(f"{project_id}: WHERE × HOW counts are outside 5–6")
-
+        project_manipulated = [
+            run for run in project_runs if run["condition"] == "manipulated"
+        ]
         for claim in claims:
-            claim_runs = [run for run in manipulated_runs if run["claim"] == claim]
-            location_counts = Counter(run["location"] for run in claim_runs)
-            method_counts = Counter(run["method"] for run in claim_runs)
-            if set(location_counts) != set(locations) or set(method_counts) != set(methods):
-                errors.append(f"{project_id}/{claim}: WHERE or HOW coverage is incomplete")
-            elif min(location_counts.values()) < 3 or max(location_counts.values()) > 4:
-                errors.append(f"{project_id}/{claim}: WHERE counts are outside 3–4")
-            elif min(method_counts.values()) < 3 or max(method_counts.values()) > 4:
-                errors.append(f"{project_id}/{claim}: HOW counts are outside 3–4")
+            claim_runs = [run for run in project_manipulated if run["claim"] == claim]
+            cells = {(run["location"], run["method"]) for run in claim_runs}
+            if len(claim_runs) != len(agents) * experiment["repeats"]:
+                errors.append(f"{project_id}/{claim}: unexpected treatment count")
+            if len(cells) != len(agents) * experiment["repeats"]:
+                errors.append(f"{project_id}/{claim}: treatment cells are duplicated")
+            if not cells.issubset(all_cells):
+                errors.append(f"{project_id}/{claim}: unknown treatment cell")
 
         benign_locations = Counter(
             run["location"] for run in project_runs if run["condition"] == "benign"
         )
-        if set(benign_locations) != set(locations):
-            errors.append(f"{project_id}: benign location coverage is incomplete")
-        elif min(benign_locations.values()) < 3 or max(benign_locations.values()) > 4:
-            errors.append(f"{project_id}: benign location counts are outside 3–4")
+        expected_per_location = len(agents) * experiment["repeats"]
+        if benign_locations != Counter({location: expected_per_location for location in locations}):
+            errors.append(f"{project_id}: benign controls are not balanced by location")
+
+    # Each agent independently covers every WHERE x HOW cell 6 or 7 times per
+    # claim across the 20 project blocks, removing the old agent-cell confound.
+    for agent_id in agent_ids:
+        for claim in claims:
+            subset = [
+                run for run in manipulated_runs
+                if run["agent_id"] == agent_id and run["claim"] == claim
+            ]
+            counts = Counter((run["location"], run["method"]) for run in subset)
+            if set(counts) != all_cells:
+                errors.append(f"{agent_id}/{claim}: WHERE x HOW coverage is incomplete")
+            elif min(counts.values()) != 6 or max(counts.values()) != 7:
+                errors.append(f"{agent_id}/{claim}: cell counts must be 6-7")
+
+    for claim in claims:
+        subset = [run for run in manipulated_runs if run["claim"] == claim]
+        counts = Counter((run["location"], run["method"]) for run in subset)
+        if set(counts) != all_cells or min(counts.values()) < 18 or max(counts.values()) > 19:
+            errors.append(f"{claim}: global cell counts must be 18-19")
+
+    matrix = [
+        treatment_design_row(
+            run,
+            project_ids,
+            agent_ids,
+            claims,
+            locations,
+            methods,
+            experiment["repeats"]
+        )
+        for run in manipulated_runs
+    ]
+    expected_rank = len(matrix[0]) if matrix else 0
+    actual_rank = numeric_rank(matrix)
+    if actual_rank != expected_rank:
+        errors.append(
+            f"treatment design matrix is rank deficient: {actual_rank}/{expected_rank}"
+        )
 
     return errors
 
 
 def validate_runtimeContracts(experiment_path, experiment, agents):
     errors = []
+    warnings = []
     audit_task = experiment_path.parent / experiment.get("audit_task", "")
     if not audit_task.is_file():
         errors.append(f"audit task not found: {audit_task}")
@@ -538,7 +703,6 @@ def validate(args):
     agents = load_agents(experiment_path, experiment)
 
     errors = []
-    warnings = []
     policy_errors, claim_names = validate_context_policy(policy)
     errors.extend(policy_errors)
     errors.extend(validate_experiment(experiment, policy, agents, len(projects)))
@@ -643,7 +807,9 @@ def validate(args):
                 print(f"  {card['project_id']} {sha256(path)}")
 
     planned_runs = len(projects) * len(agents) * experiment.get("repeats", 0) * (
-        2 + len(experiment.get("design", {}).get("manipulated_claims", []))
+        1
+        + len(experiment.get("design", {}).get("locations", []))
+        + len(experiment.get("design", {}).get("manipulated_claims", []))
     )
     print(f"Benchmark: {manifest.get('benchmark_id')}")
     print(f"Experiment: {experiment.get('experiment_id')}")

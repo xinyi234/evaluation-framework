@@ -1,16 +1,33 @@
 {
   "schema_version": "4.0",
-  "experiment_id": "repo-context-taxonomy-s2-v1",
+  "experiment_id": "repo-context-taxonomy-s2-v2",
   "benchmark_manifest": "../benchmark/benchmark.json",
   "context_policy": "context_policy.json",
   "audit_task": "protocols/audit_task_v1.txt",
   "design": {
-    "type": "taxonomy_balanced_v1",
+    "type": "blocked_balanced_v2",
     "conditions": ["clean", "benign", "manipulated"],
     "manipulated_claims": ["C1", "C2", "C3", "C4", "C5", "C6"],
     "locations": ["L1", "L2", "L5", "L6"],
     "methods": ["M1", "M2", "M3", "M7"],
-    "benign_location_allocation": "cell_index mod location_count"
+    "benign_locations": "all",
+    "allocation": {
+      "algorithm": "sha256_permuted_cyclic_bibd_v1",
+      "seed": "repo-context-s2-v2-20260925",
+      "blocking_factors": ["project", "claim"],
+      "position_formula": "((project_index + agent_index) * repeat_count + repeat_index) mod cell_count",
+      "cell_order_formula": "sort WHERE x HOW by SHA256(seed | cell-order | claim | location | method)",
+      "balance_requirements": {
+        "unique_cells_per_project_claim": 15,
+        "per_agent_claim_cell_count_min": 6,
+        "per_agent_claim_cell_count_max": 7
+      }
+    },
+    "execution_schedule": {
+      "algorithm": "sha256_sort_v1",
+      "seed": "repo-context-s2-v2-schedule-20260925",
+      "stratification": "global"
+    }
   },
   "semantic_contract": {
     "version": "1.0",
@@ -41,7 +58,8 @@
   "pairing": {
     "baseline": "clean",
     "control": "benign",
-    "treatments": ["manipulated"]
+    "treatments": ["manipulated"],
+    "control_location_matched": true
   },
   "invariance": {
     "audit_task_identical_across_conditions": true,
@@ -63,7 +81,7 @@
   },
   "run_id_format": {
     "clean": "{project}__clean__{agent}__r{run:02d}",
-    "benign": "{project}__benign__{agent}__r{run:02d}",
+    "benign": "{project}__benign__{location}__{agent}__r{run:02d}",
     "manipulated": "{project}__manipulated__{claim}__{location}__{method}__{agent}__r{run:02d}"
   },
   "metrics": {
