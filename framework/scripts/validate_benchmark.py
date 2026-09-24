@@ -26,6 +26,20 @@ ALLOWED_METHOD_PLACEHOLDERS = {"{location_title}", "{claim_body}", "{claim_closi
 EXPECTED_CLAIMS = {"C1", "C2", "C3", "C4", "C5", "C6"}
 EXPECTED_LOCATIONS = {"L1", "L2", "L5", "L6"}
 EXPECTED_METHODS = {"M1", "M2", "M3", "M7"}
+REQUIRED_METHOD_ATTRIBUTES = {
+    "expression", "authority_cue", "normative_framing", "distribution",
+    "representation", "prior_output_framing"
+}
+BENIGN_FORBIDDEN_RE = re.compile(
+    r"\b(?:must|should|audit findings?|security conclusions?|vulnerabilit(?:y|ies)|"
+    r"based on (?:source )?code|do not|must not)\b",
+    re.IGNORECASE
+)
+WRAPPER_DIRECTIVE_RE = re.compile(
+    r"\b(?:must|should|do not|must not|mandatory|approved|final|"
+    r"no (?:new )?finding|not be reported)\b",
+    re.IGNORECASE
+)
 
 
 def validate_zip(project_id, path, expected_root):
@@ -66,7 +80,24 @@ def template_placeholders(value):
 def validate_context_policy(policy):
     errors = []
     if policy.get("schema_version") != "4.0":
-        return ["context policy schema_version must be 4.0"]
+        return ["context policy schema_version must be 4.0"], set()
+    if policy.get("semantic_contract_version") != "1.0":
+        errors.append("context policy semantic_contract_version must be 1.0")
+
+    contract = policy.get("annotation_contract", {})
+    contract_fields = {
+        "content_modes", "factual_statuses", "rule_authorities",
+        "rule_applicabilities", "evidence_relations", "agent_evidence_access"
+    }
+    if not contract_fields.issubset(contract):
+        errors.append("context policy annotation contract is incomplete")
+
+    content_modes = set(contract.get("content_modes", []))
+    factual_statuses = set(contract.get("factual_statuses", []))
+    rule_authorities = set(contract.get("rule_authorities", []))
+    rule_applicabilities = set(contract.get("rule_applicabilities", []))
+    evidence_relations = set(contract.get("evidence_relations", []))
+    evidence_access = set(contract.get("agent_evidence_access", []))
 
     claims = policy.get("claim_categories", {})
     if set(claims) != EXPECTED_CLAIMS:
@@ -80,16 +111,60 @@ def validate_context_policy(policy):
             errors.append(f"context policy has duplicate claim name {name}")
         else:
             claim_names.add(name)
-        if claim.get("truthfulness") != "false":
-            errors.append(f"context policy claim {claim_id} must be false")
+        required = {
+            "content_mode", "intended_goal", "truthfulness", "factual_status",
+            "rule_authority", "rule_applicability", "evidence_relation",
+            "evidence_reference", "required_evidence", "agent_evidence_access",
+            "verifiability", "primary_analysis_eligible", "body_template", "closing"
+        }
+        missing = sorted(required - set(claim))
+        if missing:
+            errors.append(f"context policy claim {claim_id} is missing fields {missing}")
+            continue
+        content_mode = claim["content_mode"]
+        if content_mode not in content_modes or content_mode == "neutral_control":
+            errors.append(f"context policy claim {claim_id} has invalid content_mode")
+        if content_mode == "behavioral_directive":
+            errors.append(f"context policy claim {claim_id} cannot be a behavioral directive")
+        if claim["factual_status"] not in factual_statuses:
+            errors.append(f"context policy claim {claim_id} has invalid factual_status")
+        if claim["rule_authority"] not in rule_authorities:
+            errors.append(f"context policy claim {claim_id} has invalid rule_authority")
+        if claim["rule_applicability"] not in rule_applicabilities:
+            errors.append(f"context policy claim {claim_id} has invalid rule_applicability")
+        if claim["evidence_relation"] not in evidence_relations:
+            errors.append(f"context policy claim {claim_id} has invalid evidence_relation")
+        if claim["agent_evidence_access"] not in evidence_access:
+            errors.append(f"context policy claim {claim_id} has invalid agent_evidence_access")
+        if content_mode == "descriptive_claim":
+            if claim["factual_status"] == "not_applicable":
+                errors.append(f"descriptive claim {claim_id} requires a factual_status")
+            if claim["rule_authority"] != "not_applicable" \
+                    or claim["rule_applicability"] != "not_applicable":
+                errors.append(f"descriptive claim {claim_id} cannot use normative rule labels")
+        if content_mode == "normative_rule":
+            if claim["factual_status"] != "not_applicable":
+                errors.append(f"normative rule {claim_id} must use factual_status=not_applicable")
+            if claim["rule_authority"] == "not_applicable" \
+                    or claim["rule_applicability"] == "not_applicable":
+                errors.append(f"normative rule {claim_id} requires authority and applicability labels")
+        if not isinstance(claim["evidence_reference"], str) or not claim["evidence_reference"]:
+            errors.append(f"context policy claim {claim_id} requires an evidence_reference")
+        if not isinstance(claim["required_evidence"], list) or not claim["required_evidence"]:
+            errors.append(f"context policy claim {claim_id} requires evidence sources")
+        if not isinstance(claim["primary_analysis_eligible"], bool):
+            errors.append(f"context policy claim {claim_id} has invalid primary_analysis_eligible")
+        if claim["primary_analysis_eligible"] is False and not claim.get("eligibility_blocker"):
+            errors.append(f"ineligible claim {claim_id} requires an eligibility_blocker")
         if claim.get("verifiability") not in (
-            "repo_verifiable", "code_verifiable", "environment_verifiable", "normative"
+            "repo_verifiable", "code_verifiable", "environment_verifiable",
+            "history_verifiable", "task_verifiable"
         ):
             errors.append(f"context policy claim {claim_id} has invalid verifiability")
-        invalid = template_placeholders(claim.get("body_template")) - ALLOWED_CLAIM_PLACEHOLDERS
-        if invalid:
+        placeholders = template_placeholders(claim.get("body_template"))
+        if placeholders != ALLOWED_CLAIM_PLACEHOLDERS:
             errors.append(
-                f"context policy claim {claim_id} has invalid placeholders {sorted(invalid)}"
+                f"context policy claim {claim_id} must use only {{affected_areas}}"
             )
 
     locations = policy.get("locations", {})
@@ -101,18 +176,36 @@ def validate_context_policy(policy):
             errors.append(f"context policy location {location_id} must use a safe Markdown carrier")
         if location.get("executable") is not False:
             errors.append(f"context policy location {location_id} must be non-executable")
+        if "trust_profile" in location:
+            errors.append(f"context policy location {location_id} cannot hard-code a trust profile")
+        for field in ("carrier_family", "document_role", "artifact_format", "asserted_source"):
+            if not isinstance(location.get(field), str) or not location[field]:
+                errors.append(f"context policy location {location_id} requires {field}")
+        if location.get("artifact_format") != "markdown":
+            errors.append(f"context policy location {location_id} must declare markdown format")
+    if locations.get("L5", {}).get("carrier_family") != "project_documentation":
+        errors.append("L5 is documentation, not deployment or tooling configuration")
+    if locations.get("L6", {}).get("carrier_family") != "project_documentation":
+        errors.append("L6 is documentation, not package or dependency metadata")
 
     methods = policy.get("methods", {})
     if set(methods) != EXPECTED_METHODS:
         errors.append(f"context policy main methods must be {sorted(EXPECTED_METHODS)}")
     for method_id, method in methods.items():
-        invalid = template_placeholders(method.get("wrapper_template")) - ALLOWED_METHOD_PLACEHOLDERS
-        if invalid:
+        placeholders = template_placeholders(method.get("wrapper_template"))
+        if placeholders != ALLOWED_METHOD_PLACEHOLDERS:
             errors.append(
-                f"context policy method {method_id} has invalid placeholders {sorted(invalid)}"
+                f"context policy method {method_id} must use all and only the wrapper placeholders"
             )
-        if "{claim_body}" not in template_placeholders(method.get("wrapper_template")):
-            errors.append(f"context policy method {method_id} must include {{claim_body}}")
+        attributes = method.get("attributes", {})
+        missing = sorted(REQUIRED_METHOD_ATTRIBUTES - set(attributes))
+        if missing:
+            errors.append(f"context policy method {method_id} is missing attributes {missing}")
+        if not isinstance(attributes.get("prior_output_framing"), bool):
+            errors.append(f"context policy method {method_id} has invalid prior_output_framing")
+        wrapper_without_placeholders = re.sub(r"\{[^}]+\}", "", method.get("wrapper_template", ""))
+        if WRAPPER_DIRECTIVE_RE.search(wrapper_without_placeholders):
+            errors.append(f"context policy method {method_id} wrapper adds directive semantics")
 
     main_levels = policy.get("main_levels", {})
     if main_levels.get("claims") != sorted(EXPECTED_CLAIMS):
@@ -129,6 +222,19 @@ def validate_context_policy(policy):
         errors.append("context policy benign truthfulness must be not_applicable")
     if benign.get("verifiability") != "non_decisive_control":
         errors.append("context policy benign verifiability must be non_decisive_control")
+    if benign.get("content_mode") != "neutral_control":
+        errors.append("context policy benign content_mode must be neutral_control")
+    for field in (
+        "factual_status", "rule_authority", "rule_applicability",
+        "evidence_relation", "agent_evidence_access"
+    ):
+        if benign.get(field) != "not_applicable":
+            errors.append(f"context policy benign {field} must be not_applicable")
+    for location_id, template in benign.get("templates_by_location", {}).items():
+        if template_placeholders(template) != ALLOWED_CLAIM_PLACEHOLDERS:
+            errors.append(f"benign template {location_id} must use only {{affected_areas}}")
+        if BENIGN_FORBIDDEN_RE.search(template):
+            errors.append(f"benign template {location_id} contains security or grounding guidance")
 
     allocation = policy.get("allocation", {})
     formula = allocation.get("formula", {})
@@ -139,9 +245,12 @@ def validate_context_policy(policy):
         errors.append("context policy benign location formula is missing")
 
     required_constraints = {
-        "one_false_security_proposition_per_manipulated_variant",
+        "one_atomic_security_item_per_manipulated_variant",
         "one_non_executable_carrier_per_manipulated_variant",
-        "method_wrapper_changes_presentation_not_claim_category",
+        "method_wrapper_changes_presentation_not_claim_semantics",
+        "wrapper_adds_no_security_proposition_or_behavioral_directive",
+        "neutral_control_contains_no_security_conclusion_or_grounding_instruction",
+        "all_introduced_text_is_annotated",
         "no_agent_control_instructions"
     }
     if not required_constraints.issubset(set(policy.get("payload_constraints", []))):
@@ -163,6 +272,33 @@ def validate_experiment(experiment, policy, agents, project_count):
         errors.append("experiment locations do not match context policy")
     if design.get("methods") != policy.get("main_levels", {}).get("methods"):
         errors.append("experiment methods do not match context policy")
+    semantic_contract = experiment.get("semantic_contract", {})
+    if semantic_contract.get("version") != policy.get("semantic_contract_version"):
+        errors.append("experiment semantic contract version does not match context policy")
+    for flag in (
+        "claim_content_mode_is_explicit",
+        "presentation_attributes_are_separate_from_claim_semantics",
+        "carrier_family_is_separate_from_document_role",
+        "truthfulness_and_rule_authority_are_not_interchangeable",
+        "neutral_control_must_not_contain_grounding_guidance"
+    ):
+        if semantic_contract.get(flag) is not True:
+            errors.append(f"experiment semantic contract must enable {flag}")
+    analysis_sets = experiment.get("analysis_sets", {})
+    eligible_claims = sorted(
+        claim_id
+        for claim_id, claim in policy.get("claim_categories", {}).items()
+        if claim.get("primary_analysis_eligible") is True
+    )
+    pending_claims = sorted(
+        claim_id
+        for claim_id, claim in policy.get("claim_categories", {}).items()
+        if claim.get("primary_analysis_eligible") is False
+    )
+    if sorted(analysis_sets.get("primary_claims", [])) != eligible_claims:
+        errors.append("experiment primary claims do not match policy eligibility labels")
+    if sorted(analysis_sets.get("pending_reference_evidence", [])) != pending_claims:
+        errors.append("experiment pending claims do not match policy eligibility labels")
     if set(experiment.get("conditions", [])) != {"clean", "benign", "manipulated"}:
         errors.append("experiment conditions must be clean, benign, manipulated")
     if experiment.get("repeats", 0) < 1:

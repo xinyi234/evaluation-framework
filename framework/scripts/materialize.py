@@ -58,30 +58,64 @@ def clean_context():
     return {
         "claim": None,
         "claim_category": None,
+        "content_mode": None,
+        "intended_goal": None,
         "location": None,
         "method": None,
         "carrier": None,
+        "carrier_family": None,
+        "document_role": None,
+        "artifact_format": None,
+        "asserted_source": None,
+        "method_attributes": None,
         "truthfulness": "not_applicable",
+        "factual_status": "not_applicable",
+        "rule_authority": "not_applicable",
+        "rule_applicability": "not_applicable",
+        "evidence_relation": "not_applicable",
+        "evidence_reference": None,
+        "required_evidence": [],
+        "agent_evidence_access": "not_applicable",
         "verifiability": "not_applicable",
+        "primary_analysis_eligible": True,
         "payload_text": None
     }
 
 
-def benign_context(policy, location_id):
+def benign_context(card, policy, location_id):
     locations = policy["locations"]
     location_id = resolve_level(locations, location_id, "location")
     if location_id not in policy["benign"]["templates_by_location"]:
         raise ValueError(f"no benign template for location: {location_id}")
     location = locations[location_id]
+    areas = "\n".join(f"- {area}" for area in card["context_claim"]["target_areas"])
+    payload_text = policy["benign"]["templates_by_location"][location_id].format(
+        affected_areas=areas
+    )
     return {
         "claim": None,
         "claim_category": None,
+        "content_mode": policy["benign"]["content_mode"],
+        "intended_goal": None,
         "location": location_id,
         "method": None,
         "carrier": location["carrier"],
+        "carrier_family": location["carrier_family"],
+        "document_role": location["document_role"],
+        "artifact_format": location["artifact_format"],
+        "asserted_source": location["asserted_source"],
+        "method_attributes": None,
         "truthfulness": policy["benign"]["truthfulness"],
+        "factual_status": policy["benign"]["factual_status"],
+        "rule_authority": policy["benign"]["rule_authority"],
+        "rule_applicability": policy["benign"]["rule_applicability"],
+        "evidence_relation": policy["benign"]["evidence_relation"],
+        "evidence_reference": None,
+        "required_evidence": [],
+        "agent_evidence_access": policy["benign"]["agent_evidence_access"],
         "verifiability": policy["benign"]["verifiability"],
-        "payload_text": policy["benign"]["templates_by_location"][location_id]
+        "primary_analysis_eligible": True,
+        "payload_text": payload_text
     }
 
 
@@ -107,11 +141,27 @@ def taxonomy_context(card, policy, claim_id, location_id, method_id):
     return {
         "claim": claim_id,
         "claim_category": claim["name"],
+        "content_mode": claim["content_mode"],
+        "intended_goal": claim["intended_goal"],
         "location": location_id,
         "method": method_id,
         "carrier": location["carrier"],
+        "carrier_family": location["carrier_family"],
+        "document_role": location["document_role"],
+        "artifact_format": location["artifact_format"],
+        "asserted_source": location["asserted_source"],
+        "method_attributes": method["attributes"],
         "truthfulness": claim["truthfulness"],
+        "factual_status": claim["factual_status"],
+        "rule_authority": claim["rule_authority"],
+        "rule_applicability": claim["rule_applicability"],
+        "evidence_relation": claim["evidence_relation"],
+        "evidence_reference": claim["evidence_reference"],
+        "required_evidence": claim["required_evidence"],
+        "agent_evidence_access": claim["agent_evidence_access"],
         "verifiability": claim["verifiability"],
+        "primary_analysis_eligible": claim["primary_analysis_eligible"],
+        "eligibility_blocker": claim.get("eligibility_blocker"),
         "payload_text": payload_text
     }
 
@@ -126,7 +176,7 @@ def build_context(card, policy, condition, variant):
             raise ValueError("benign runs require a location variant")
         if variant.get("claim") is not None or variant.get("method") is not None:
             raise ValueError("benign runs cannot have a claim or method")
-        return benign_context(policy, variant["location"])
+        return benign_context(card, policy, variant["location"])
     if condition == "manipulated":
         if variant is None:
             raise ValueError("manipulated runs require claim, location, and method")
@@ -193,22 +243,20 @@ def materialize_one(
             context["payload_text"].encode("utf-8")
         ).hexdigest()
 
+    context_record = {
+        key: value
+        for key, value in context.items()
+        if key != "payload_text"
+    }
+    context_record["payload_sha256"] = payload_sha256
+
     return {
         "run_id": run_id,
         "project_id": card["project_id"],
         "condition": condition,
         "status": status,
         "path": str(workspace),
-        "context": {
-            "claim": context["claim"],
-            "claim_category": context["claim_category"],
-            "location": context["location"],
-            "method": context["method"],
-            "carrier": context["carrier"],
-            "truthfulness": context["truthfulness"],
-            "verifiability": context["verifiability"],
-            "payload_sha256": payload_sha256
-        },
+        "context": context_record,
         "payload_text": context["payload_text"]
     }
 

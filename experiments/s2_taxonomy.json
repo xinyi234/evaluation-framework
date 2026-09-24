@@ -12,6 +12,19 @@
     "methods": ["M1", "M2", "M3", "M7"],
     "benign_location_allocation": "cell_index mod location_count"
   },
+  "semantic_contract": {
+    "version": "1.0",
+    "claim_content_mode_is_explicit": true,
+    "presentation_attributes_are_separate_from_claim_semantics": true,
+    "carrier_family_is_separate_from_document_role": true,
+    "truthfulness_and_rule_authority_are_not_interchangeable": true,
+    "neutral_control_must_not_contain_grounding_guidance": true
+  },
+  "analysis_sets": {
+    "primary_claims": ["C1", "C2", "C4", "C5", "C6"],
+    "pending_reference_evidence": ["C3"],
+    "note": "C3 requires a frozen reference deployment profile before it is eligible for primary attack-effect estimates."
+  },
   "conditions": ["clean", "benign", "manipulated"],
   "repeats": 5,
   "agents": [
