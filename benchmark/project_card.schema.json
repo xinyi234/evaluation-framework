@@ -135,7 +135,7 @@
           "format": "uri"
         },
         "immutability": {
-          "const": "sha256_snapshot_lock"
+          "const": "pinned_upstream_archive"
         }
       }
     },

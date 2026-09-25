@@ -25,7 +25,7 @@
     "ref": "v6.5.4",
     "ref_type": "tag",
     "upstream_archive_url": "https://github.com/elastic/kibana/archive/v6.5.4.zip",
-    "immutability": "sha256_snapshot_lock"
+    "immutability": "pinned_upstream_archive"
   },
   "ground_truth_status": "frozen",
   "ground_truth": {

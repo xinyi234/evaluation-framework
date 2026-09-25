@@ -25,7 +25,7 @@
     "ref": "v8.3.0",
     "ref_type": "tag",
     "upstream_archive_url": "https://github.com/grafana/grafana/archive/v8.3.0.zip",
-    "immutability": "sha256_snapshot_lock"
+    "immutability": "pinned_upstream_archive"
   },
   "ground_truth_status": "frozen",
   "ground_truth": {

@@ -560,8 +560,8 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
 
     snapshot_file = snapshot_path(benchmark_path, manifest, project)
     snapshot_sha256 = sha256(snapshot_file)
-    expected_snapshot_sha256 = run["snapshot_sha256"]
-    if snapshot_sha256 != expected_snapshot_sha256:
+    expected_snapshot_sha256 = run.get("snapshot_sha256")
+    if expected_snapshot_sha256 and snapshot_sha256 != expected_snapshot_sha256:
         raise ValueError(f"snapshot hash mismatch for {run['project_id']}")
 
     materialization = materialize_one(

@@ -9,7 +9,6 @@
     "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", "P19", "P20"
   ],
   "snapshot_root": "../repos",
-  "snapshot_lock": "snapshot_lock.json",
   "primary_cve_policy": "one_cve_per_repository",
   "inclusion_rules": [
     "official_or_widely_recognized_upstream_repository",

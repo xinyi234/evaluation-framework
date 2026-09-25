@@ -25,7 +25,7 @@
     "ref": "v13.10.2",
     "ref_type": "tag",
     "upstream_archive_url": "https://github.com/gitlabhq/gitlabhq/archive/v13.10.2.zip",
-    "immutability": "sha256_snapshot_lock"
+    "immutability": "pinned_upstream_archive"
   },
   "ground_truth_status": "frozen",
   "ground_truth": {

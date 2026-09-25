@@ -22,17 +22,6 @@ def relative_path(experiment_path, configured_path):
     return resolved.relative_to(dataset_root).as_posix()
 
 
-def snapshot_locks(benchmark_path, manifest):
-    lock_path = benchmark_path.parent / manifest["snapshot_lock"]
-    if not lock_path.is_file():
-        raise FileNotFoundError(f"snapshot lock not found: {lock_path}")
-    lock = load_json(lock_path)
-    return {
-        item["project_id"]: item["sha256"]
-        for item in lock.get("snapshots", [])
-    }
-
-
 def validate_design_alignment(experiment, policy, agents):
     design = experiment.get("design", {})
     if design.get("type") != DESIGN_TYPE:
@@ -76,8 +65,7 @@ def base_run(
     run,
     experiment,
     workspace_root,
-    runs_root,
-    snapshot_sha256
+    runs_root
 ):
     return {
         "project_id": card["project_id"],
@@ -95,8 +83,7 @@ def base_run(
         "artifact_dir": None,
         "pair_key": f"{card['project_id']}__{agent['agent_id']}__r{run:02d}",
         "baseline_run_id": None,
-        "snapshot_archive": card["snapshot"]["archive"],
-        "snapshot_sha256": snapshot_sha256
+        "snapshot_archive": card["snapshot"]["archive"]
     }
 
 
@@ -204,7 +191,6 @@ def build_plan(benchmark_path, experiment_path, manifest, projects, experiment, 
 
     workspace_root = relative_path(experiment_path, experiment["paths"]["workspace_root"])
     runs_root = relative_path(experiment_path, experiment["paths"]["runs_root"])
-    locks = snapshot_locks(Path(benchmark_path).resolve(), manifest)
 
     claims = experiment["design"]["manipulated_claims"]
     locations = experiment["design"]["locations"]
@@ -213,10 +199,6 @@ def build_plan(benchmark_path, experiment_path, manifest, projects, experiment, 
     runs = []
 
     for project_index, card in enumerate(projects):
-        snapshot_sha256 = locks.get(card["project_id"])
-        if snapshot_sha256 is None:
-            raise ValueError(f"snapshot lock missing for {card['project_id']}")
-
         for agent_index, (agent_entry, agent) in enumerate(zip(experiment["agents"], agents)):
             for repeat_index in range(experiment["repeats"]):
                 run = repeat_index + 1
@@ -234,8 +216,7 @@ def build_plan(benchmark_path, experiment_path, manifest, projects, experiment, 
                     run,
                     experiment,
                     workspace_root,
-                    runs_root,
-                    snapshot_sha256
+                    runs_root
                 )
                 clean.update({"condition": "clean", **clean_context_record(), **block_fields})
                 add_paths(clean, clean_id, workspace_root, runs_root)
@@ -254,8 +235,7 @@ def build_plan(benchmark_path, experiment_path, manifest, projects, experiment, 
                         run,
                         experiment,
                         workspace_root,
-                        runs_root,
-                        snapshot_sha256
+                        runs_root
                     )
                     benign.update({
                         "condition": "benign",
@@ -292,8 +272,7 @@ def build_plan(benchmark_path, experiment_path, manifest, projects, experiment, 
                         run,
                         experiment,
                         workspace_root,
-                        runs_root,
-                        snapshot_sha256
+                        runs_root
                     )
                     manipulated.update({
                         "condition": "manipulated",

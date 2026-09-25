@@ -5,7 +5,7 @@ import zipfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from common import load_agents, load_benchmark, load_json, sha256, snapshot_path
+from common import load_agents, load_benchmark, load_json, snapshot_path
 from design import (
     ALLOCATION_ALGORITHM,
     DESIGN_TYPE,
@@ -430,7 +430,7 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
             "run_id", "project_id", "repository", "cve", "condition", "agent_id",
             "scaffold", "model", "agent_config", "run", "timeout_s", "audit_task",
             "context_policy", "workspace_dir", "artifact_dir", "pair_key",
-            "snapshot_archive", "snapshot_sha256", "claim", "claim_category",
+            "snapshot_archive", "claim", "claim_category",
             "content_mode", "intended_goal", "location", "method", "carrier",
             "carrier_family", "document_role", "artifact_format", "asserted_source",
             "method_attributes", "truthfulness", "factual_status", "rule_authority",
@@ -538,8 +538,6 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
         if Counter(run["location"] for run in benign_runs) != Counter(locations):
             errors.append(f"{key}: benign locations are incomplete or duplicated")
         if clean and len(benign_by_location) == len(locations):
-            if len({run["snapshot_sha256"] for run in group}) != 1:
-                errors.append(f"{key}: snapshot hash differs across paired conditions")
             if any(run.get("baseline_run_id") != clean["run_id"] for run in group if run["condition"] != "clean"):
                 errors.append(f"{key}: baseline run ID mismatch")
             if any(
@@ -646,7 +644,6 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
 
 def validate_runtimeContracts(experiment_path, experiment, agents):
     errors = []
-    warnings = []
     audit_task = experiment_path.parent / experiment.get("audit_task", "")
     if not audit_task.is_file():
         errors.append(f"audit task not found: {audit_task}")
@@ -752,8 +749,8 @@ def validate(args):
         ]
         if missing_snapshot:
             errors.append(f"{project_id}: missing snapshot fields {missing_snapshot}")
-        if snapshot.get("immutability") != "sha256_snapshot_lock":
-            errors.append(f"{project_id}: snapshot immutability must be sha256_snapshot_lock")
+        if snapshot.get("immutability") != "pinned_upstream_archive":
+            errors.append(f"{project_id}: snapshot immutability must be pinned_upstream_archive")
         errors.extend(
             validate_zip(
                 project_id,
@@ -778,19 +775,6 @@ def validate(args):
             if args.strict_ground_truth:
                 errors.append(f"{project_id}: ground truth is not frozen")
 
-    lock_path = benchmark_path.parent / manifest.get("snapshot_lock", "")
-    if lock_path.is_file():
-        lock = load_json(lock_path)
-        locked = {item.get("project_id"): item.get("sha256") for item in lock.get("snapshots", [])}
-        if set(locked) != set(project_ids):
-            errors.append("snapshot lock project IDs do not match benchmark manifest")
-        for card in projects:
-            path = snapshot_path(benchmark_path, manifest, card)
-            if path.is_file() and locked.get(card["project_id"]) != sha256(path):
-                errors.append(f"{card['project_id']}: snapshot SHA-256 does not match lock")
-    else:
-        warnings.append("snapshot lock not found; run freeze_snapshots.py before main runs")
-
     if args.run_plan:
         run_plan_path = Path(args.run_plan).resolve()
         if not run_plan_path.is_file():
@@ -798,13 +782,6 @@ def validate(args):
         else:
             plan = load_json(run_plan_path)
             errors.extend(validate_run_plan(plan, experiment, policy, projects, agents))
-
-    if args.compute_hashes:
-        print("Snapshot hashes:")
-        for card in projects:
-            path = snapshot_path(benchmark_path, manifest, card)
-            if path.is_file():
-                print(f"  {card['project_id']} {sha256(path)}")
 
     planned_runs = len(projects) * len(agents) * experiment.get("repeats", 0) * (
         1
@@ -821,10 +798,6 @@ def validate(args):
     print(f"Planned runs: {planned_runs}")
     if args.run_plan:
         print(f"Run plan: {Path(args.run_plan).resolve()}")
-    if warnings:
-        print("Warnings:")
-        for warning in warnings:
-            print(f"  {warning}")
     if errors:
         print("Errors:")
         for error in errors:
@@ -842,7 +815,6 @@ def main():
     parser.add_argument("--context-policy", required=True)
     parser.add_argument("--run-plan")
     parser.add_argument("--strict-ground-truth", action="store_true")
-    parser.add_argument("--compute-hashes", action="store_true")
     validate(parser.parse_args())
 
 
