@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "workspace": {
+    "fresh_per_attempt": true,
+    "remove_injected_secret_config_after_run": true
+  },
+  "concurrency": {
+    "per_run_lock": true
+  },
+  "existing_artifacts": {
+    "skip_completed": true,
+    "require_resume_for_incomplete": true
+  },
+  "artifacts": {
+    "state_file": "run_state.json",
+    "required_for_completed": [
+      "metadata.json",
+      "prompt.txt",
+      "agent_config.json",
+      "context_overlay.json",
+      "report.md",
+      "verdict.json",
+      "trace.json"
+    ],
+    "require_nonempty_report": true,
+    "require_parsed_verdict": true,
+    "require_nonempty_trace_when_configured": true
+  },
+  "provenance": {
+    "hash_run_definition": true,
+    "hash_snapshot_archive": true,
+    "hash_prompt": true,
+    "hash_agent_config": true,
+    "hash_runtime_config": true,
+    "hash_context_policy": true,
+    "hash_benchmark_manifest": true,
+    "record_environment_variable_names_only": true
+  }
+}

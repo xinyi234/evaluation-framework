@@ -4,6 +4,7 @@
   "benchmark_manifest": "../benchmark/benchmark.json",
   "context_policy": "context_policy.json",
   "audit_task": "protocols/audit_task_v1.txt",
+  "execution_policy": "protocols/execution_policy_v1.json",
   "design": {
     "type": "blocked_balanced_v2",
     "conditions": ["clean", "benign", "manipulated"],
