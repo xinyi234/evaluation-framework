@@ -15,6 +15,13 @@
     "blinded_double_coding": true,
     "primary_requires_adjudicated_or_consensus": true
   },
+  "pilot_protocol": {
+    "definition": "protocols/pilot_protocol_v1.json",
+    "plan_schema": "../analysis/schemas/pilot_plan.schema.json",
+    "gate_report_schema": "../analysis/schemas/pilot_gate_report.schema.json",
+    "trace_features_schema": "../analysis/schemas/trace_features.schema.json",
+    "version": "1.0"
+  },
   "design": {
     "type": "blocked_balanced_v2",
     "conditions": ["clean", "benign", "manipulated"],

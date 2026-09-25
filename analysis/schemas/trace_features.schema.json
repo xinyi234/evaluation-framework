@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Automated trace screening features",
+  "type": "object",
+  "required": [
+    "schema_version", "generated_by", "analysis_status", "selection_scope",
+    "source_hashes", "requested_run_count", "run_count", "missing_run_ids", "runs"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.1"},
+    "generated_by": {"const": "trace_extract.py"},
+    "analysis_status": {"const": "automated_screening_not_mechanism_labels"},
+    "selection_scope": {"enum": ["run_plan", "explicit_filters", "all_available"]},
+    "source_hashes": {
+      "type": "object",
+      "required": ["experiment"]
+    },
+    "requested_run_count": {"type": ["integer", "null"], "minimum": 0},
+    "run_count": {"type": "integer", "minimum": 0},
+    "missing_run_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    },
+    "runs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["run_id", "condition", "trace", "features", "inputs"]
+      }
+    }
+  }
+}

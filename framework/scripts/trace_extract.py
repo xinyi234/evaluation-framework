@@ -30,7 +30,8 @@ import re
 import sys
 from pathlib import Path
 
-from common import load_json, load_benchmark
+from common import load_json, load_benchmark, sha256
+from execution_contract import atomic_write_json
 
 
 # --------------------------------------------------------------------------
@@ -367,6 +368,10 @@ def main():
     )
     parser.add_argument("--results", required=True, help="runs root (datasets/runs)")
     parser.add_argument("--experiment", required=True, help="S2 experiment definition (s2_taxonomy.json)")
+    parser.add_argument(
+        "--run-plan",
+        help="restrict extraction to the exact run ids in a full or pilot run plan",
+    )
     parser.add_argument("--out", required=True, help="output JSON (analysis/generated/trace_features.json)")
     parser.add_argument("--run-id", action="append", help="restrict to one or more run ids")
     parser.add_argument("--agent", help="restrict to an agent id")
@@ -384,6 +389,18 @@ def main():
     run_dirs = sorted(
         d for d in results_root.iterdir() if d.is_dir() and (d / "metadata.json").is_file()
     )
+    requested_ids = None
+    missing_run_ids = []
+    run_plan_path = None
+    if args.run_plan:
+        run_plan_path = Path(args.run_plan).resolve()
+        run_plan = load_json(run_plan_path)
+        if run_plan.get("experiment_id") != experiment.get("experiment_id"):
+            raise SystemExit("run plan experiment_id mismatch")
+        requested_ids = {run["run_id"] for run in run_plan.get("runs", [])}
+        available_ids = {directory.name for directory in run_dirs}
+        missing_run_ids = sorted(requested_ids - available_ids)
+        run_dirs = [directory for directory in run_dirs if directory.name in requested_ids]
     if args.run_id:
         wanted = set(args.run_id)
         run_dirs = [d for d in run_dirs if d.name in wanted]
@@ -406,24 +423,28 @@ def main():
                   file=sys.stderr)
         records[run_dir.name] = compute_features(run_dir, card)
 
+    if run_plan_path:
+        selection_scope = "run_plan"
+    elif args.run_id or args.agent or args.condition:
+        selection_scope = "explicit_filters"
+    else:
+        selection_scope = "all_available"
+    source_hashes = {"experiment": sha256(experiment_path)}
+    if run_plan_path:
+        source_hashes["run_plan"] = sha256(run_plan_path)
+    payload = {
+        "schema_version": "1.1",
+        "generated_by": "trace_extract.py",
+        "analysis_status": "automated_screening_not_mechanism_labels",
+        "selection_scope": selection_scope,
+        "source_hashes": source_hashes,
+        "requested_run_count": len(requested_ids) if requested_ids is not None else None,
+        "run_count": len(records),
+        "missing_run_ids": missing_run_ids,
+        "runs": records,
+    }
     out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(
-        json.dumps(
-            {
-                "schema_version": "1.0",
-                "generated_by": "trace_extract.py",
-                "analysis_status": "provisional_text_heuristics",
-                "run_count": len(records),
-                "runs": records,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    atomic_write_json(out_path, payload)
     print(f"extracted {len(records)} run(s) -> {out_path}")
 
     if args.summary:

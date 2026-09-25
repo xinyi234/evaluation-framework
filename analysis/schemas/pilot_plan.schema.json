@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Deterministic pilot run plan",
+  "type": "object",
+  "required": [
+    "schema_version", "pilot_schema_version", "plan_kind", "pilot_protocol_id",
+    "experiment_id", "benchmark_manifest", "context_policy", "selection_algorithm",
+    "source_hashes", "selected_block_count", "run_count", "condition_counts",
+    "coverage", "selected_pair_keys", "runs"
+  ],
+  "properties": {
+    "schema_version": {"const": "4.0"},
+    "pilot_schema_version": {"const": "1.0"},
+    "plan_kind": {"const": "pilot_subset"},
+    "pilot_protocol_id": {"const": "repo-context-pilot-v1"},
+    "experiment_id": {"type": "string"},
+    "benchmark_manifest": {"type": "string"},
+    "context_policy": {"type": "string"},
+    "selection_algorithm": {"const": "deterministic_agent_stratified_greedy_coverage_v1"},
+    "source_hashes": {
+      "type": "object",
+      "required": ["experiment", "full_run_plan", "pilot_protocol"]
+    },
+    "selected_block_count": {"type": "integer", "minimum": 1},
+    "run_count": {"type": "integer", "minimum": 1},
+    "condition_counts": {
+      "type": "object",
+      "required": ["clean", "benign", "manipulated"]
+    },
+    "coverage": {
+      "type": "object",
+      "required": [
+        "project_ids", "agent_ids", "claims", "locations", "methods",
+        "location_method_cells", "blocks_per_agent"
+      ]
+    },
+    "selected_pair_keys": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["run_id", "pair_key", "project_id", "agent_id", "condition"]
+      }
+    }
+  }
+}
