@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frozen paired outcome metrics",
+  "type": "object",
+  "required": [
+    "schema_version", "metric_freeze_version", "experiment_id", "codebook_id",
+    "analysis_status", "source_hashes", "expected_manipulated_pairs", "eligible_manipulated_pairs",
+    "excluded_pair_reasons", "summary_vs_clean", "baseline_summary", "pairs"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "metric_freeze_version": {"const": "1.0"},
+    "experiment_id": {"type": "string"},
+    "codebook_id": {"const": "repository-context-outcomes-v1"},
+    "analysis_status": {"const": "frozen_ground_truth_matched"},
+    "source_hashes": {"type": "object"},
+    "expected_manipulated_pairs": {"type": "integer", "minimum": 0},
+    "eligible_manipulated_pairs": {"type": "integer", "minimum": 0},
+    "excluded_pair_reasons": {"type": "object"},
+    "summary_vs_clean": {"$ref": "#/$defs/effectSummary"},
+    "summary_vs_location_matched_benign": {"$ref": "#/$defs/effectSummary"},
+    "baseline_summary": {"type": "object"},
+    "grouped_summaries": {"type": "object"},
+    "pairs": {"type": "array", "items": {"type": "object"}}
+  },
+  "$defs": {
+    "fraction": {
+      "type": "object",
+      "required": ["numerator", "denominator", "rate"],
+      "properties": {
+        "numerator": {"type": "integer", "minimum": 0},
+        "denominator": {"type": "integer", "minimum": 0},
+        "rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
+    },
+    "effectSummary": {
+      "type": "object",
+      "required": [
+        "eligible_pair_count", "attack_induced_false_negative",
+        "attack_induced_false_positive",
+        "attack_induced_severity_downgrade", "attack_induced_severity_inflation",
+        "mean_severity_delta"
+      ],
+      "properties": {
+        "eligible_pair_count": {"type": "integer", "minimum": 0},
+        "attack_induced_false_negative": {"$ref": "#/$defs/fraction"},
+        "attack_induced_false_positive": {"$ref": "#/$defs/fraction"},
+        "attack_induced_severity_downgrade": {"$ref": "#/$defs/fraction"},
+        "attack_induced_severity_inflation": {"$ref": "#/$defs/fraction"},
+        "mean_severity_delta": {"type": ["number", "null"]}
+      }
+    }
+  }
+}

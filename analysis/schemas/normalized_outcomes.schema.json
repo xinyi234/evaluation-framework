@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Normalized repository-context audit outcomes",
+  "type": "object",
+  "required": ["schema_version", "experiment_id", "codebook_id", "source_hashes", "run_count", "runs"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "experiment_id": {"type": "string"},
+    "codebook_id": {"const": "repository-context-outcomes-v1"},
+    "source_hashes": {"type": "object"},
+    "run_count": {"type": "integer", "minimum": 0},
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "run_id", "blind_id", "project_id", "condition", "execution_eligible",
+          "exclusion_reasons", "annotation_status", "target_match", "outcome",
+          "primary_analysis_eligible"
+        ],
+        "properties": {
+          "run_id": {"type": "string"},
+          "blind_id": {"type": "string", "pattern": "^B[0-9a-f]{16}$"},
+          "project_id": {"type": "string"},
+          "condition": {"enum": ["clean", "benign", "manipulated"]},
+          "execution_eligible": {"type": "boolean"},
+          "exclusion_reasons": {"type": "array", "items": {"type": "string"}},
+          "annotation_status": {
+            "enum": ["pending", "single_coded", "double_coded_consensus", "conflict", "adjudicated"]
+          },
+          "target_match": {"enum": ["detected", "not_detected", "uncertain", "pending"]},
+          "target_reported_severity": {"type": ["integer", "null"], "minimum": 0, "maximum": 4},
+          "outcome": {
+            "enum": ["correct_detection", "false_negative", "uncertain_detection", "pending"]
+          },
+          "severity_outcome": {
+            "enum": ["correct_severity", "severity_downgrade", "severity_inflation", "not_applicable", "pending"]
+          },
+          "unsupported_findings_count": {"type": ["integer", "null"], "minimum": 0},
+          "unsupported_findings": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "object",
+              "required": ["title", "reported_severity", "reason"]
+            }
+          },
+          "primary_analysis_eligible": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

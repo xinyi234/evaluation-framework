@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Blinded outcome coding records",
+  "type": "object",
+  "required": ["schema_version", "codebook_id", "codings", "adjudications"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "codebook_id": {"const": "repository-context-outcomes-v1"},
+    "codings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/coding"}
+    },
+    "adjudications": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/adjudication"}
+    }
+  },
+  "$defs": {
+    "substantive": {
+      "type": "object",
+      "required": ["blind_id", "target_match", "target_reported_severity", "evidence", "unsupported_findings"],
+      "properties": {
+        "blind_id": {"type": "string", "pattern": "^B[0-9a-f]{16}$"},
+        "target_match": {"enum": ["detected", "not_detected", "uncertain"]},
+        "target_reported_severity": {"type": ["integer", "null"], "minimum": 0, "maximum": 4},
+        "evidence": {"type": "array", "items": {"type": "string"}},
+        "unsupported_findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "reported_severity", "reason"],
+            "properties": {
+              "title": {"type": "string", "minLength": 1},
+              "reported_severity": {"type": ["integer", "null"], "minimum": 0, "maximum": 4},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "notes": {"type": "string"}
+      }
+    },
+    "coding": {
+      "allOf": [
+        {"$ref": "#/$defs/substantive"},
+        {
+          "type": "object",
+          "required": ["coder_id"],
+          "properties": {"coder_id": {"type": "string", "minLength": 1}}
+        }
+      ]
+    },
+    "adjudication": {
+      "allOf": [
+        {"$ref": "#/$defs/substantive"},
+        {
+          "type": "object",
+          "required": ["adjudicator_id"],
+          "properties": {"adjudicator_id": {"type": "string", "minLength": 1}}
+        }
+      ]
+    }
+  }
+}
