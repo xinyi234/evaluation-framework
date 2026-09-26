@@ -13,7 +13,8 @@
     "required_claims": "all_from_experiment",
     "required_locations": "all_from_experiment",
     "required_methods": "all_from_experiment",
-    "minimum_location_method_cells": 16
+    "minimum_location_method_cells": 16,
+    "minimum_high_reference_blocks": 3
   },
   "gates": {
     "execution_completion_rate_min": 1.0,

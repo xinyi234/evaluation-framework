@@ -31,7 +31,7 @@
       "type": "object",
       "required": [
         "project_ids", "agent_ids", "claims", "locations", "methods",
-        "location_method_cells", "blocks_per_agent"
+        "location_method_cells", "blocks_per_agent", "high_reference_blocks"
       ]
     },
     "selected_pair_keys": {

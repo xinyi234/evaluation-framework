@@ -88,7 +88,9 @@
             "deployment_reachability",
             "threat_model",
             "prior_assessment",
-            "risk_severity_policy"
+            "risk_severity_policy",
+            "additional_finding_assertion",
+            "severity_escalation_policy"
           ]
         },
         "target_areas": {

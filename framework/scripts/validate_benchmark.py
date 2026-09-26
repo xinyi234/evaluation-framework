@@ -31,7 +31,8 @@ ALLOWED_RUNTIME_PLACEHOLDERS = {
 }
 ALLOWED_CLAIM_PLACEHOLDERS = {"{affected_areas}"}
 ALLOWED_METHOD_PLACEHOLDERS = {"{location_title}", "{claim_body}", "{claim_closing}"}
-EXPECTED_CLAIMS = {"C1", "C2", "C3", "C4", "C5", "C6"}
+EXPECTED_CLAIMS = {"C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"}
+EXPECTED_GOALS = {"concealment", "downgrade", "fabrication", "inflation"}
 EXPECTED_LOCATIONS = {"L1", "L2", "L5", "L6"}
 EXPECTED_METHODS = {"M1", "M2", "M3", "M7"}
 REQUIRED_METHOD_ATTRIBUTES = {
@@ -91,6 +92,8 @@ def validate_context_policy(policy):
         return ["context policy schema_version must be 4.0"], set()
     if policy.get("semantic_contract_version") != "1.0":
         errors.append("context policy semantic_contract_version must be 1.0")
+    if policy.get("entry_boundary") != "repository_snapshot":
+        errors.append("context policy entry_boundary must be repository_snapshot")
 
     contract = policy.get("annotation_contract", {})
     contract_fields = {
@@ -111,6 +114,7 @@ def validate_context_policy(policy):
     if set(claims) != EXPECTED_CLAIMS:
         errors.append(f"context policy claim categories must be {sorted(EXPECTED_CLAIMS)}")
     claim_names = set()
+    intended_goals = set()
     for claim_id, claim in claims.items():
         name = claim.get("name")
         if not isinstance(name, str) or not name:
@@ -129,6 +133,7 @@ def validate_context_policy(policy):
         if missing:
             errors.append(f"context policy claim {claim_id} is missing fields {missing}")
             continue
+        intended_goals.add(claim["intended_goal"])
         content_mode = claim["content_mode"]
         if content_mode not in content_modes or content_mode == "neutral_control":
             errors.append(f"context policy claim {claim_id} has invalid content_mode")
@@ -174,6 +179,10 @@ def validate_context_policy(policy):
             errors.append(
                 f"context policy claim {claim_id} must use only {{affected_areas}}"
             )
+    if intended_goals != EXPECTED_GOALS:
+        errors.append(
+            f"context policy intended goals must be {sorted(EXPECTED_GOALS)}"
+        )
 
     locations = policy.get("locations", {})
     if set(locations) != EXPECTED_LOCATIONS:
@@ -186,9 +195,11 @@ def validate_context_policy(policy):
             errors.append(f"context policy location {location_id} must be non-executable")
         if "trust_profile" in location:
             errors.append(f"context policy location {location_id} cannot hard-code a trust profile")
-        for field in ("carrier_family", "document_role", "artifact_format", "asserted_source"):
+        for field in ("carrier_family", "document_role", "artifact_format"):
             if not isinstance(location.get(field), str) or not location[field]:
                 errors.append(f"context policy location {location_id} requires {field}")
+        if "asserted_source" in location:
+            errors.append(f"context policy location {location_id} cannot define asserted_source")
         if location.get("artifact_format") != "markdown":
             errors.append(f"context policy location {location_id} must declare markdown format")
     if locations.get("L5", {}).get("carrier_family") != "project_documentation":
@@ -211,6 +222,8 @@ def validate_context_policy(policy):
             errors.append(f"context policy method {method_id} is missing attributes {missing}")
         if not isinstance(attributes.get("prior_output_framing"), bool):
             errors.append(f"context policy method {method_id} has invalid prior_output_framing")
+        if not isinstance(attributes.get("asserted_source"), str) or not attributes["asserted_source"]:
+            errors.append(f"context policy method {method_id} requires asserted_source")
         wrapper_without_placeholders = re.sub(r"\{[^}]+\}", "", method.get("wrapper_template", ""))
         if WRAPPER_DIRECTIVE_RE.search(wrapper_without_placeholders):
             errors.append(f"context policy method {method_id} wrapper adds directive semantics")
@@ -427,12 +440,12 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
 
     for run in runs:
         required = {
-            "run_id", "project_id", "repository", "cve", "condition", "agent_id",
+            "run_id", "project_id", "repository", "cve", "reference_severity", "condition", "agent_id",
             "scaffold", "model", "agent_config", "run", "timeout_s", "audit_task",
             "context_policy", "workspace_dir", "artifact_dir", "pair_key",
             "snapshot_archive", "claim", "claim_category",
             "content_mode", "intended_goal", "location", "method", "carrier",
-            "carrier_family", "document_role", "artifact_format", "asserted_source",
+            "carrier_family", "document_role", "artifact_format", "actual_source", "asserted_source",
             "method_attributes", "truthfulness", "factual_status", "rule_authority",
             "rule_applicability", "evidence_relation", "evidence_reference",
             "required_evidence", "agent_evidence_access", "verifiability",
@@ -443,6 +456,9 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
         if missing:
             errors.append(f"{run.get('run_id', '<missing>')}: missing fields {sorted(missing)}")
             continue
+        card = next((item for item in projects if item["project_id"] == run["project_id"]), None)
+        if card is not None and run["reference_severity"] != card["vulnerability"]["severity"]:
+            errors.append(f"{run['run_id']}: reference severity mismatch")
         if run["condition"] == "clean":
             if any(run[field] is not None for field in ("claim", "claim_category", "location", "method", "carrier")):
                 errors.append(f"{run['run_id']}: clean run has taxonomy fields")
@@ -460,7 +476,8 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
                 "carrier_family": location.get("carrier_family"),
                 "document_role": location.get("document_role"),
                 "artifact_format": location.get("artifact_format"),
-                "asserted_source": location.get("asserted_source"),
+                "actual_source": "experiment_authored_repository_context",
+                "asserted_source": "unspecified",
                 "truthfulness": benign.get("truthfulness"),
                 "factual_status": benign.get("factual_status"),
                 "rule_authority": benign.get("rule_authority"),
@@ -496,7 +513,8 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
                 "carrier_family": location.get("carrier_family"),
                 "document_role": location.get("document_role"),
                 "artifact_format": location.get("artifact_format"),
-                "asserted_source": location.get("asserted_source"),
+                "actual_source": "attacker_controlled_repository_context",
+                "asserted_source": method.get("attributes", {}).get("asserted_source"),
                 "method_attributes": method.get("attributes"),
                 "factual_status": claim.get("factual_status"),
                 "rule_authority": claim.get("rule_authority"),

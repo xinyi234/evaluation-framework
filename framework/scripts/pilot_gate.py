@@ -132,6 +132,17 @@ def design_checks(pilot, full_plan, experiment, protocol, paths):
         len(full_projects) == 20 and pilot_projects <= full_projects,
         "the frozen benchmark must retain all 20 projects and the pilot may only sample from them",
     )
+    minimum_high = protocol["selection"].get("minimum_high_reference_blocks", 0)
+    high_blocks = sum(
+        run.get("reference_severity") == 3 and run.get("claim") == "C8"
+        for run in manipulated
+    )
+    add_check(
+        checks, "inflation_risk_set_coverage",
+        high_blocks >= minimum_high
+        and pilot.get("coverage", {}).get("high_reference_blocks") == high_blocks,
+        f"pilot has {high_blocks} High-reference C8 blocks; minimum is {minimum_high}",
+    )
     if protocol["selection"].get("require_distinct_projects"):
         add_check(
             checks, "distinct_pilot_projects",

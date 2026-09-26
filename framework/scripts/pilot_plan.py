@@ -74,6 +74,7 @@ def build_candidates(full_plan, experiment, agent_ids):
             "project_id": next(iter(projects)),
             "agent_id": agent,
             "repeat": next(iter(repeats)),
+            "reference_severity": runs[0].get("reference_severity"),
             "runs": runs,
             "claims": claims,
             "locations": {run.get("location") for run in runs},
@@ -117,6 +118,13 @@ def select_blocks(full_plan, experiment, protocol, agent_ids):
     selected_projects = set()
     covered = {"claims": set(), "locations": set(), "methods": set(), "cells": set()}
     distinct_projects = bool(selection.get("require_distinct_projects"))
+    minimum_high = selection.get("minimum_high_reference_blocks", 0)
+    if not isinstance(minimum_high, int) or minimum_high < 0:
+        raise ValueError("selection.minimum_high_reference_blocks must be non-negative")
+    if minimum_high > blocks_per_agent * len(agent_ids):
+        raise ValueError("minimum_high_reference_blocks exceeds pilot block count")
+    high_selected = 0
+    slot_number = 0
     for _slot in range(blocks_per_agent):
         for agent_id in agent_ids:
             pool = [
@@ -129,6 +137,10 @@ def select_blocks(full_plan, experiment, protocol, agent_ids):
                     "cannot satisfy distinct-project pilot selection; "
                     "reduce blocks_per_agent or disable the constraint"
                 )
+            if slot_number < minimum_high:
+                pool = [candidate for candidate in pool if candidate["reference_severity"] == 3]
+                if not pool:
+                    raise ValueError("not enough distinct High-reference pilot candidates")
             ranked = sorted(
                 pool,
                 key=lambda candidate: (
@@ -138,6 +150,8 @@ def select_blocks(full_plan, experiment, protocol, agent_ids):
                 ),
             )
             choice = ranked[0]
+            high_selected += choice["reference_severity"] == 3
+            slot_number += 1
             selected.append(choice)
             selected_keys.add(choice["pair_key"])
             selected_projects.add(choice["project_id"])
@@ -157,6 +171,8 @@ def select_blocks(full_plan, experiment, protocol, agent_ids):
             f"pilot selection covers {len(covered['cells'])} location-method cells; "
             f"protocol requires {minimum_cells}"
         )
+    if high_selected < minimum_high:
+        raise ValueError("pilot selection lacks High-reference C8 risk-set coverage")
     return selected
 
 
@@ -220,6 +236,9 @@ def make_pilot_plan(full_plan_path, experiment_path, protocol_path, full_plan,
             "methods": sorted({run["method"] for run in manipulated}),
             "location_method_cells": cells,
             "blocks_per_agent": dict(sorted(blocks_per_agent.items())),
+            "high_reference_blocks": sum(
+                block["reference_severity"] == 3 for block in selected
+            ),
         },
         "selected_pair_keys": [block["pair_key"] for block in selected],
         "runs": runs,
