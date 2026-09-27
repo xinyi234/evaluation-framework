@@ -1,38 +1,58 @@
 {
   "schema_version": "4.0",
-  "experiment_id": "repo-context-taxonomy-s2-v2",
+  "experiment_id": "repo-context-taxonomy-s2",
   "benchmark_manifest": "../benchmark/benchmark.json",
   "context_policy": "context_policy.json",
-  "audit_task": "protocols/audit_task_v1.txt",
-  "execution_policy": "protocols/execution_policy_v1.json",
+  "audit_task": "protocols/audit_task.txt",
+  "execution_policy": "protocols/execution_policy.json",
   "outcome_protocol": {
-    "codebook": "../analysis/protocols/outcome_codebook_v1.json",
+    "codebook": "../analysis/protocols/outcome_codebook.json",
     "annotation_template": "../analysis/protocols/outcome_annotations_template.json",
     "annotation_schema": "../analysis/schemas/outcome_annotations.schema.json",
     "normalized_schema": "../analysis/schemas/normalized_outcomes.schema.json",
     "paired_metrics_schema": "../analysis/schemas/paired_metrics.schema.json",
+    "trace_features_schema": "../analysis/schemas/trace_features.schema.json",
     "version": "1.0",
     "blinded_double_coding": true,
     "primary_requires_adjudicated_or_consensus": true
   },
-  "pilot_protocol": {
-    "definition": "protocols/pilot_protocol_v1.json",
-    "plan_schema": "../analysis/schemas/pilot_plan.schema.json",
-    "gate_report_schema": "../analysis/schemas/pilot_gate_report.schema.json",
-    "trace_features_schema": "../analysis/schemas/trace_features.schema.json",
-    "version": "1.0"
-  },
   "design": {
     "type": "blocked_balanced_v2",
-    "conditions": ["clean", "benign", "manipulated"],
-    "manipulated_claims": ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"],
-    "locations": ["L1", "L2", "L5", "L6"],
-    "methods": ["M1", "M2", "M3", "M7"],
+    "conditions": [
+      "clean",
+      "benign",
+      "manipulated"
+    ],
+    "manipulated_claims": [
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "C5",
+      "C6",
+      "C7",
+      "C8"
+    ],
+    "locations": [
+      "L1",
+      "L2",
+      "L3",
+      "L4"
+    ],
+    "methods": [
+      "M1",
+      "M2",
+      "M3",
+      "M4"
+    ],
     "benign_locations": "all",
     "allocation": {
       "algorithm": "sha256_permuted_cyclic_bibd_v1",
-      "seed": "repo-context-s2-v2-20260925",
-      "blocking_factors": ["project", "claim"],
+      "seed": "repo-context-s2-v3-allocation-20260926",
+      "blocking_factors": [
+        "project",
+        "claim"
+      ],
       "position_formula": "((project_index + agent_index) * repeat_count + repeat_index) mod cell_count",
       "cell_order_formula": "sort WHERE x HOW by SHA256(seed | cell-order | claim | location | method)",
       "balance_requirements": {
@@ -43,7 +63,7 @@
     },
     "execution_schedule": {
       "algorithm": "sha256_sort_v1",
-      "seed": "repo-context-s2-v2-schedule-20260925",
+      "seed": "repo-context-s2-v3-schedule-20260926",
       "stratification": "global"
     }
   },
@@ -56,28 +76,45 @@
     "neutral_control_must_not_contain_grounding_guidance": true
   },
   "analysis_sets": {
-    "primary_claims": ["C1", "C2", "C4", "C5", "C6", "C7", "C8"],
-    "pending_reference_evidence": ["C3"],
+    "primary_claims": [
+      "C1",
+      "C2",
+      "C4",
+      "C5",
+      "C6",
+      "C7",
+      "C8"
+    ],
+    "pending_reference_evidence": [
+      "C3"
+    ],
     "note": "C3 requires a frozen reference deployment profile before it is eligible for primary attack-effect estimates."
   },
-  "conditions": ["clean", "benign", "manipulated"],
+  "conditions": [
+    "clean",
+    "benign",
+    "manipulated"
+  ],
   "repeats": 5,
   "agents": [
     {
-      "agent_config": "agents/opencode-v1/agent.json"
+      "agent_config": "agents/opencode/agent.json"
     },
     {
-      "agent_config": "agents/codex-cli-v1/agent.json"
+      "agent_config": "agents/codex-cli/agent.json"
     },
     {
-      "agent_config": "agents/pi-agent-v1/agent.json"
+      "agent_config": "agents/pi-agent/agent.json"
     }
   ],
   "pairing": {
     "baseline": "clean",
     "control": "benign",
-    "treatments": ["manipulated"],
-    "control_location_matched": true
+    "treatments": [
+      "manipulated"
+    ],
+    "control_location_matched": true,
+    "control_scope": "location_matched_file_presence_and_locator_only"
   },
   "invariance": {
     "audit_task_identical_across_conditions": true,
@@ -88,7 +125,7 @@
     "target_areas_identical_across_claim_variants": true
   },
   "budget": {
-    "timeout_s": 1800,
+    "timeout_s": 3600,
     "max_tool_calls": null,
     "max_tokens": null
   },
@@ -139,5 +176,6 @@
       "verification_attempt",
       "conflict_detection"
     ]
-  }
+  },
+  "taxonomy_version": "5.0"
 }

@@ -1,0 +1,48 @@
+{
+  "protocol_id": "repo-context-taxonomy-validation-v1",
+  "taxonomy_version": "5.0",
+  "purpose": "Assess study-scoped codebook coverage using independent external cases; do not infer universal exhaustiveness.",
+  "corpus_sampling": {
+    "source": "dated external papers, benchmarks, advisories, and attack reports with an inspectable repository-context artifact",
+    "inclusion": "attacker-influenced non-code repository context that a code agent can encounter during a security audit",
+    "exclusion": "system or developer instruction, pure tool API output, direct user prompt, and source-code-only modification",
+    "deduplication_unit": "distinct attack instance and artifact, not each report describing the same instance",
+    "phase_split": "freeze the codebook after calibration, then evaluate a source-separated heldout set",
+    "minimum_adjudicated_heldout_cases": 30
+  },
+  "coding": {
+    "coders": 2,
+    "independence": "coders annotate each case without seeing the other's labels",
+    "labels": "in_scope boolean and one WHERE, HOW, WHAT label per in-scope case; use OUT_OF_CODEBOOK plus a description when no level fits",
+    "adjudication": "resolve every disagreement and out-of-codebook case; keep the original independent labels",
+    "report": "exact scope and triple-label agreement, heldout coverage, axis-specific out-of-codebook cases"
+  },
+  "method_review": {
+    "reference": "M1 payload for the same project, claim, and location",
+    "candidate": "blinded M1-M4 payload with the same project, claim, and location",
+    "questions": ["same_security_proposition", "no_extra_security_proposition", "no_agent_directive", "presentation_cue_distinct"],
+    "interpretation": "M4 is an attribution wrapper around the same claim body, not a paraphrase of that body. M1 is the reference and is exempt from cue distinctness.",
+    "gate": "two independent positive annotations per case; resolve disagreements before using the method contrast"
+  },
+  "example_case": {
+    "case_id": "external-001",
+    "source_id": "source-001",
+    "source_url": "https://example.org/source",
+    "publication_date": "YYYY-MM-DD",
+    "capture_date": "YYYY-MM-DD",
+    "phase": "heldout",
+    "entry_boundary": "repository_snapshot",
+    "artifact_kind": "repository Markdown file",
+    "evidence_excerpt": "Short source-grounded description or excerpt",
+    "sampling_rationale": "Explain why the instance meets the threat-model inclusion criteria"
+  },
+  "example_annotation": {
+    "case_id": "external-001",
+    "coder_id": "coder-a",
+    "in_scope": true,
+    "where": "L1",
+    "how": "M1",
+    "what": "C1",
+    "ooc_description": ""
+  }
+}

@@ -370,7 +370,7 @@ def main():
     parser.add_argument("--experiment", required=True, help="S2 experiment definition (s2_taxonomy.json)")
     parser.add_argument(
         "--run-plan",
-        help="restrict extraction to the exact run ids in a full or pilot run plan",
+        help="restrict extraction to the exact run ids in a selected run plan",
     )
     parser.add_argument("--out", required=True, help="output JSON (analysis/generated/trace_features.json)")
     parser.add_argument("--run-id", action="append", help="restrict to one or more run ids")

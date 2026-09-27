@@ -5,7 +5,8 @@ import zipfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from common import load_agents, load_benchmark, load_json, snapshot_path
+from common import load_agents, load_benchmark, load_json, sha256, snapshot_path
+from context_identity import context_identity
 from design import (
     ALLOCATION_ALGORITHM,
     DESIGN_TYPE,
@@ -27,14 +28,14 @@ REQUIRED_GROUND_TRUTH_FIELDS = [
 ALLOWED_RUNTIME_PLACEHOLDERS = {
     "{workspace}", "{prompt_file}", "{report}", "{trace}", "{artifact_dir}",
     "{model}", "{agent_config}", "{context_policy}", "{benchmark_manifest}",
-    "{run_id}"
+    "{run_id}", "{session_label}"
 }
 ALLOWED_CLAIM_PLACEHOLDERS = {"{affected_areas}"}
 ALLOWED_METHOD_PLACEHOLDERS = {"{location_title}", "{claim_body}", "{claim_closing}"}
 EXPECTED_CLAIMS = {"C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"}
 EXPECTED_GOALS = {"concealment", "downgrade", "fabrication", "inflation"}
-EXPECTED_LOCATIONS = {"L1", "L2", "L5", "L6"}
-EXPECTED_METHODS = {"M1", "M2", "M3", "M7"}
+EXPECTED_LOCATIONS = {"L1", "L2", "L3", "L4"}
+EXPECTED_METHODS = {"M1", "M2", "M3", "M4"}
 REQUIRED_METHOD_ATTRIBUTES = {
     "expression", "authority_cue", "normative_framing", "distribution",
     "representation", "prior_output_framing"
@@ -90,6 +91,8 @@ def validate_context_policy(policy):
     errors = []
     if policy.get("schema_version") != "4.0":
         return ["context policy schema_version must be 4.0"], set()
+    if policy.get("taxonomy_version") != "5.0" or policy.get("policy_id") != "repo-context-injection-taxonomy-v5":
+        errors.append("context policy taxonomy identity must be v5")
     if policy.get("semantic_contract_version") != "1.0":
         errors.append("context policy semantic_contract_version must be 1.0")
     if policy.get("entry_boundary") != "repository_snapshot":
@@ -202,10 +205,10 @@ def validate_context_policy(policy):
             errors.append(f"context policy location {location_id} cannot define asserted_source")
         if location.get("artifact_format") != "markdown":
             errors.append(f"context policy location {location_id} must declare markdown format")
-    if locations.get("L5", {}).get("carrier_family") != "project_documentation":
-        errors.append("L5 is documentation, not deployment or tooling configuration")
-    if locations.get("L6", {}).get("carrier_family") != "project_documentation":
-        errors.append("L6 is documentation, not package or dependency metadata")
+    if locations.get("L3", {}).get("carrier_family") != "project_documentation":
+        errors.append("L3 is documentation, not deployment or tooling configuration")
+    if locations.get("L4", {}).get("carrier_family") != "project_documentation":
+        errors.append("L4 is documentation, not package or dependency metadata")
 
     methods = policy.get("methods", {})
     if set(methods) != EXPECTED_METHODS:
@@ -276,6 +279,8 @@ def validate_experiment(experiment, policy, agents, project_count):
     if experiment.get("schema_version") != "4.0":
         errors.append("experiment schema_version must be 4.0")
         return errors
+    if experiment.get("taxonomy_version") != policy.get("taxonomy_version"):
+        errors.append("experiment taxonomy version does not match policy")
     design = experiment.get("design", {})
     if design.get("type") != DESIGN_TYPE:
         errors.append(f"experiment design.type must be {DESIGN_TYPE}")
@@ -329,6 +334,8 @@ def validate_experiment(experiment, policy, agents, project_count):
         errors.append("pairing treatment must be manipulated")
     if experiment.get("pairing", {}).get("control_location_matched") is not True:
         errors.append("pairing must use location-matched benign controls")
+    if experiment.get("pairing", {}).get("control_scope") != "location_matched_file_presence_and_locator_only":
+        errors.append("benign control scope must be file presence and locator cues only")
     for key, value in experiment.get("invariance", {}).items():
         if value is not True:
             errors.append(f"invariance.{key} must be true")
@@ -381,7 +388,7 @@ def treatment_design_row(run, project_ids, agent_ids, claims, locations, methods
     return row
 
 
-def validate_run_plan(plan, experiment, policy, projects, agents):
+def validate_run_plan(plan, experiment, policy, projects, agents, benchmark_path, manifest):
     errors = []
     if plan.get("schema_version") != "4.0":
         errors.append("run-plan schema_version must be 4.0")
@@ -437,10 +444,12 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
     agent_ids = [agent["agent_id"] for agent in agents]
     groups = defaultdict(list)
     by_run_id = {run.get("run_id"): run for run in runs}
+    card_by_id = {card["project_id"]: card for card in projects}
+    snapshot_hashes = {card["project_id"]: sha256(snapshot_path(benchmark_path, manifest, card)) for card in projects}
 
     for run in runs:
         required = {
-            "run_id", "project_id", "repository", "cve", "reference_severity", "condition", "agent_id",
+            "run_id", "taxonomy_version", "policy_id", "project_id", "repository", "cve", "reference_severity", "condition", "agent_id",
             "scaffold", "model", "agent_config", "run", "timeout_s", "audit_task",
             "context_policy", "workspace_dir", "artifact_dir", "pair_key",
             "snapshot_archive", "claim", "claim_category",
@@ -449,14 +458,21 @@ def validate_run_plan(plan, experiment, policy, projects, agents):
             "method_attributes", "truthfulness", "factual_status", "rule_authority",
             "rule_applicability", "evidence_relation", "evidence_reference",
             "required_evidence", "agent_evidence_access", "verifiability",
-            "primary_analysis_eligible", "context_variant_id", "project_index",
+            "primary_analysis_eligible", "context_variant_id", "snapshot_sha256", "payload_sha256", "project_index",
             "agent_index", "repeat_index", "schedule_key", "schedule_order"
         }
         missing = required - set(run)
         if missing:
             errors.append(f"{run.get('run_id', '<missing>')}: missing fields {sorted(missing)}")
             continue
-        card = next((item for item in projects if item["project_id"] == run["project_id"]), None)
+        if run["taxonomy_version"] != policy["taxonomy_version"] or run["policy_id"] != policy["policy_id"]:
+            errors.append(f"{run['run_id']}: taxonomy identity mismatch")
+        card = card_by_id.get(run["project_id"])
+        if card is not None:
+            expected_identity = context_identity(card, policy, run["condition"], run["claim"], run["location"], run["method"], snapshot_hashes[run["project_id"]])
+            for identity_field, identity_value in expected_identity.items():
+                if run.get(identity_field) != identity_value:
+                    errors.append(f"{run['run_id']}: {identity_field} mismatch")
         if card is not None and run["reference_severity"] != card["vulnerability"]["severity"]:
             errors.append(f"{run['run_id']}: reference severity mismatch")
         if run["condition"] == "clean":
@@ -701,10 +717,15 @@ def validate_runtimeContracts(experiment_path, experiment, agents):
             template = agent_dir / agent["config_template"]
             if not template.is_file():
                 errors.append(f"{agent_id}: config template not found: {template}")
-        if runtime.get("workspace_config_file"):
-            value = runtime["workspace_config_file"]
-            if not isinstance(value, str) or not value or ".." in Path(value).parts:
-                errors.append(f"{agent_id}: workspace_config_file must be a safe relative path")
+        for config_field in ("workspace_config_file", "artifact_config_file"):
+            if runtime.get(config_field):
+                value = runtime[config_field]
+                if not isinstance(value, str) or not value or Path(value).is_absolute() or ".." in Path(value).parts:
+                    errors.append(f"{agent_id}: {config_field} must be a safe relative path")
+        if agent.get("config_template") and bool(runtime.get("workspace_config_file")) == bool(runtime.get("artifact_config_file")):
+            errors.append(f"{agent_id}: config template requires exactly one config destination")
+        if runtime.get("config_env") not in (None, "OPENCODE_CONFIG"):
+            errors.append(f"{agent_id}: unsupported config_env")
     return errors
 
 
@@ -799,7 +820,7 @@ def validate(args):
             errors.append(f"run plan not found: {run_plan_path}")
         else:
             plan = load_json(run_plan_path)
-            errors.extend(validate_run_plan(plan, experiment, policy, projects, agents))
+            errors.extend(validate_run_plan(plan, experiment, policy, projects, agents, benchmark_path, manifest))
 
     planned_runs = len(projects) * len(agents) * experiment.get("repeats", 0) * (
         1

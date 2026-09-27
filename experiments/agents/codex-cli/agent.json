@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0",
-  "agent_id": "pi-agent-v1",
-  "scaffold": "pi-agent",
-  "model": "deepseek/deepseek-v4-pro",
+  "agent_id": "codex-cli",
+  "scaffold": "codex-cli",
+  "model": "deepseek-v4-pro",
   "runtime_file": "runtime.json",
-  "timeout_s": 1800,
+  "timeout_s": 3600,
   "artifact_policy": {
     "prompt_snapshot": "prompt.txt",
     "redacted_agent_config_snapshot": "agent_config.json",

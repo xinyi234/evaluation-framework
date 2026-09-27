@@ -6,3 +6,5 @@ analysis/generated/
 .env
 *.local.json
 __pycache__/
+repos/*
+!repos/README.md

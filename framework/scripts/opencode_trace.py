@@ -226,12 +226,21 @@ def normalize(session, messages, carrier=None, ground_truth=None, repo_root=None
             elif ptype == "tool":
                 target = _tool_target(pd)
                 rel_target = _relativize(target, repo_root)
+                state = pd.get("state") or {}
+                doc_type = classify_target(
+                    target, carrier=carrier, ground_truth=ground_truth,
+                    repo_root=repo_root
+                )
                 events.append({
                     "type": "tool_call",
                     "tool": pd.get("tool") or pd.get("name") or "unknown",
                     "target": rel_target,
+                    "raw_target": target,
+                    "input": state.get("input") or {},
+                    "status": state.get("status"),
+                    "output": state.get("output") if doc_type == "injected" else None,
                     "duration_ms": _tool_duration(pd, part["time_created"], part["time_updated"]),
-                    "doc_type": classify_target(target, carrier=carrier, ground_truth=ground_truth, repo_root=repo_root),
+                    "doc_type": doc_type,
                     "ts": part["time_created"],
                 })
         text = "\n\n".join(t for t in text_parts if t)

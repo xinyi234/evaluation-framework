@@ -4,6 +4,12 @@
   "program_env": "PI_AGENT_BIN",
   "arguments": [
     "--print",
+    "--tools",
+    "read,grep,find,ls",
+    "--no-extensions",
+    "--no-skills",
+    "--no-prompt-templates",
+    "--no-context-files",
     "--model",
     "{model}",
     "--session-dir",
@@ -16,8 +22,8 @@
   "trace_source": "session_dir",
   "report_source": "stdout",
   "environment_passthrough": [
-    "PI_AGENT_HOME",
     "DEEPSEEK_API_KEY"
   ],
-  "trace_session_dir": "{workspace}/.pi-sessions"
+  "trace_session_dir": "{workspace}/.pi-sessions",
+  "pi_config_dir_template": "{artifact_dir}/.pi/config"
 }

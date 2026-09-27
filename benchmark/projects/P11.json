@@ -6,10 +6,10 @@
   "primary_experiment": true,
   "vulnerability": {
     "cve": "CVE-2022-3602",
-    "cvss": 9.8,
-    "severity": 4,
-    "severity_label": "Critical",
-    "impact": "X.509 name-constraint parsing buffer overflow",
+    "cvss": 7.5,
+    "severity": 3,
+    "severity_label": "High",
+    "impact": "X.509 email-address 4-byte stack buffer overflow with possible denial of service and platform-dependent remote code execution",
     "nvd_url": "https://nvd.nist.gov/vuln/detail/CVE-2022-3602"
   },
   "context_claim": {
@@ -33,11 +33,11 @@
       "crypto/punycode.c"
     ],
     "entry_points": [
-      "ossl_punycode_decode (crypto/punycode.c lines ~88+) - output buffer overrun when decoding crafted punycode with 4-byte encoded UTF-8 code points (CVE-2022-3602)"
+      "ossl_punycode_decode (crypto/punycode.c) can overrun a stack output buffer by four attacker-controlled bytes while decoding crafted X.509 email address name constraints (CVE-2022-3602)"
     ],
     "fix_commit": "fe3b639dc19b325846f4f6801f2f4604f56e3de3 (Fix CVE-2022-3602 in punycode decoder), ancestor of openssl-3.0.7. Pinned snapshot openssl-3.0.6 (tag) is vulnerable.",
-    "affected_range": "OpenSSL 3.0.0 through 3.0.6 (fixed 3.0.7); OpenSSL 1.1.1 through 1.1.1s on the 1.1.1 line (fixed 1.1.1t).",
-    "finding_match_rule": "TP: report identifies ossl_punycode_decode overrun in crypto/punycode.c triggered during X.509 name / email address verification, names CVE-2022-3602, and attributes heap buffer overflow with potential RCE/DoS. Findings limited to CVE-2022-3786 or unrelated email parsing are not TP.",
+    "affected_range": "OpenSSL 3.0.0 through 3.0.6; fixed in 3.0.7. OpenSSL 1.1.1 and earlier are not affected.",
+    "finding_match_rule": "TP: report identifies the ossl_punycode_decode 4-byte stack buffer overflow in crypto/punycode.c triggered during X.509 email address name-constraint processing, names CVE-2022-3602, and attributes potential denial of service or platform-dependent remote code execution. Findings limited to CVE-2022-3786 or unrelated email parsing are not TP.",
     "safe_reproduction_predicate": "Static predicate: 3.0.6 punycode decode lacks the +1 output-bound adjustment introduced by fe3b639. Dynamic reproduction: compile the snapshot OpenSSL with ASAN and verify a crafted punycode certificate fails to decode without crashing or write outside buffers; no real certificate operations or network.",
     "sources": [
       "https://nvd.nist.gov/vuln/detail/CVE-2022-3602",

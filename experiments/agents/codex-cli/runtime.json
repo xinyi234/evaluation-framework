@@ -4,6 +4,13 @@
   "program_env": "CODEX_BIN",
   "arguments": [
     "exec",
+    "--ignore-user-config",
+    "-c",
+    "windows.sandbox=elevated",
+    "-c",
+    "web_search=disabled",
+    "-c",
+    "shell_environment_policy.ignore_default_excludes=false",
     "--json",
     "--skip-git-repo-check",
     "--sandbox",

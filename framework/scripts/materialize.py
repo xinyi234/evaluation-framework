@@ -252,6 +252,8 @@ def materialize_one(
         if key != "payload_text"
     }
     context_record["payload_sha256"] = payload_sha256
+    context_record["taxonomy_version"] = policy["taxonomy_version"]
+    context_record["policy_id"] = policy["policy_id"]
 
     return {
         "run_id": run_id,
@@ -278,8 +280,8 @@ def main():
         required=True
     )
     parser.add_argument("--claim", help="claim ID or name, such as C3 or deployment_reachability")
-    parser.add_argument("--location", help="location ID or name, such as L5 or deployment_tooling_context")
-    parser.add_argument("--method", help="method ID or name, such as M2 or authority_impersonation")
+    parser.add_argument("--location", help="location ID or name, such as L3 or deployment_documentation")
+    parser.add_argument("--method", help="method ID or name, such as M2 or authority_cue")
     parser.add_argument("--run-id", help="materialize into workspaces/<run_id>/repository")
     parser.add_argument(
         "--output-root",

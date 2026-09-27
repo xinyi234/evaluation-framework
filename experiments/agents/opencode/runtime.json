@@ -9,18 +9,19 @@
     "--model",
     "{model}",
     "--title",
-    "{run_id}"
+    "{session_label}"
   ],
   "stdin": "prompt",
   "cwd": "{workspace}",
   "stdout": "raw/stdout.jsonl",
   "stderr": "raw/stderr.txt",
-  "workspace_config_file": "opencode.json",
   "trace_source": "opencode_db",
   "report_source": "jsonl_last_message",
   "environment_passthrough": [
     "DEEPSEEK_API_KEY"
   ],
   "xdg_config_home_template": "{artifact_dir}/.opencode/config",
-  "xdg_data_home_template": "{artifact_dir}/.opencode/data"
+  "xdg_data_home_template": "{artifact_dir}/.opencode/data",
+  "artifact_config_file": "opencode.config.json",
+  "config_env": "OPENCODE_CONFIG"
 }

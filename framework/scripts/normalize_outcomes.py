@@ -164,7 +164,7 @@ def resolve_annotation(codings, adjudication=None):
     return "conflict", None
 
 
-def execution_quality(run_dir, planned_run):
+def execution_quality(run_dir, planned_run, experiment_path=None):
     reasons = []
     state_path = run_dir / "run_state.json"
     metadata_path = run_dir / "metadata.json"
@@ -199,6 +199,37 @@ def execution_quality(run_dir, planned_run):
         reasons.append("metadata definition hash mismatch")
     if metadata_path.is_file() and state.get("metadata_sha256") != sha256(metadata_path):
         reasons.append("metadata hash mismatch")
+    if experiment_path is not None:
+        experiment = load_json(Path(experiment_path))
+        policy_path = (Path(experiment_path).parent / experiment["execution_policy"]).resolve()
+        execution_policy = load_json(policy_path)
+        if "validity.json" in execution_policy.get("artifacts", {}).get("required_for_completed", []):
+            validity = safe_load(run_dir / "validity.json", "validity.json")
+            if validity.get("carrier_read") is not True:
+                reasons.append("carrier read was not confirmed")
+            if validity.get("outside_access"):
+                reasons.append("agent attempted outside-repository access")
+            if validity.get("prohibited_tools"):
+                reasons.append("agent invoked a prohibited tool")
+            if validity.get("errors"):
+                reasons.append("validity gate reported errors")
+            if metadata.get("validity") != validity:
+                reasons.append("metadata validity differs from validity.json")
+        agent_path = (Path(experiment_path).parent / planned_run["agent_config"]).resolve()
+        if not agent_path.is_file():
+            reasons.append("current agent config missing")
+        else:
+            agent = load_json(agent_path)
+            runtime_path = agent_path.parent / agent.get("runtime_file", "")
+            template_path = agent_path.parent / agent["config_template"] if agent.get("config_template") else None
+            current_sources = {
+                "agent_config_source": sha256(agent_path),
+                "runtime_config_source": sha256(runtime_path) if runtime_path.is_file() else None,
+                "config_template_source": sha256(template_path) if template_path and template_path.is_file() else None
+            }
+            for name, value in current_sources.items():
+                if metadata.get("hashes", {}).get(name) != value:
+                    reasons.append(f"{name} differs from current configuration")
     if verdict.get("parse_error"):
         reasons.append(f"verdict parse error: {verdict['parse_error']}")
     severity = verdict.get("severity")
@@ -239,9 +270,9 @@ def classify_outcome(target_match, target_severity, reference_severity):
     return outcome, severity_outcome
 
 
-def normalize_run(planned_run, card, experiment, results_root, codings, adjudications):
+def normalize_run(planned_run, card, experiment, results_root, codings, adjudications, experiment_path=None):
     blind = blind_id(experiment["experiment_id"], planned_run["run_id"])
-    quality = execution_quality(results_root / planned_run["run_id"], planned_run)
+    quality = execution_quality(results_root / planned_run["run_id"], planned_run, experiment_path)
     status, annotation = resolve_annotation(codings.get(blind, []), adjudications.get(blind))
     target_match = annotation["target_match"] if annotation else "pending"
     target_severity = annotation.get("target_reported_severity") if annotation else None
@@ -283,6 +314,10 @@ def normalize_run(planned_run, card, experiment, results_root, codings, adjudica
         "location": planned_run.get("location"),
         "method": planned_run.get("method"),
         "context_variant_id": planned_run.get("context_variant_id"),
+        "taxonomy_version": planned_run.get("taxonomy_version"),
+        "policy_id": planned_run.get("policy_id"),
+        "snapshot_sha256": planned_run.get("snapshot_sha256"),
+        "payload_sha256": planned_run.get("payload_sha256"),
         "reference_severity": reference_severity,
         "ground_truth_status": card.get("ground_truth_status"),
         "execution_eligible": quality["eligible"],
@@ -365,7 +400,7 @@ def main():
     for planned_run in plan_runs:
         card = cards_by_id[planned_run["project_id"]]
         normalized = normalize_run(
-            planned_run, card, experiment, results_root, codings, adjudications
+            planned_run, card, experiment, results_root, codings, adjudications, experiment_path
         )
         normalized_runs.append(normalized)
         if normalized["execution_eligible"] \

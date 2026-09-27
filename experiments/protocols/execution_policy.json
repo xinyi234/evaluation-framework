@@ -1,5 +1,6 @@
 {
   "schema_version": "1.0",
+  "policy_id": "audit-execution-validity",
   "workspace": {
     "fresh_per_attempt": true,
     "remove_injected_secret_config_after_run": true
@@ -20,7 +21,8 @@
       "context_overlay.json",
       "report.md",
       "verdict.json",
-      "trace.json"
+      "trace.json",
+      "validity.json"
     ],
     "require_nonempty_report": true,
     "require_parsed_verdict": true,

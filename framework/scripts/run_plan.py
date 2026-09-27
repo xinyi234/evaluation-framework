@@ -4,7 +4,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from common import load_agents, load_benchmark, load_json
+from common import load_agents, load_benchmark, load_json, sha256, snapshot_path
+from context_identity import context_identity
 from design import (
     ALLOCATION_ALGORITHM,
     DESIGN_TYPE,
@@ -30,6 +31,8 @@ def validate_design_alignment(experiment, policy, agents):
         raise ValueError("experiment schema_version must be 4.0")
     if policy.get("schema_version") != "4.0":
         raise ValueError("context policy schema_version must be 4.0")
+    if experiment.get("taxonomy_version") != policy.get("taxonomy_version"):
+        raise ValueError("experiment taxonomy_version does not match context policy")
 
     expected = {
         "manipulated_claims": "claims",
@@ -56,6 +59,8 @@ def validate_design_alignment(experiment, policy, agents):
         raise ValueError("blocked_balanced_v2 requires benign_locations=all")
     if experiment.get("pairing", {}).get("control_location_matched") is not True:
         raise ValueError("blocked_balanced_v2 requires location-matched benign controls")
+    if experiment.get("pairing", {}).get("control_scope") != "location_matched_file_presence_and_locator_only":
+        raise ValueError("benign control scope must be file presence and locator cues only")
 
 
 def base_run(
@@ -120,7 +125,7 @@ def clean_context_record():
         "agent_evidence_access": "not_applicable",
         "verifiability": "not_applicable",
         "primary_analysis_eligible": True,
-        "context_variant_id": "clean"
+        "context_variant_id": None
     }
 
 
@@ -151,7 +156,7 @@ def benign_context_record(policy, location_id):
         "agent_evidence_access": benign["agent_evidence_access"],
         "verifiability": benign["verifiability"],
         "primary_analysis_eligible": True,
-        "context_variant_id": f"benign__{location_id}"
+        "context_variant_id": None
     }
 
 
@@ -183,7 +188,7 @@ def manipulated_context_record(policy, claim_id, location_id, method_id):
         "agent_evidence_access": claim["agent_evidence_access"],
         "verifiability": claim["verifiability"],
         "primary_analysis_eligible": claim["primary_analysis_eligible"],
-        "context_variant_id": f"{claim_id}__{location_id}__{method_id}"
+        "context_variant_id": None
     }
 
 
@@ -201,6 +206,8 @@ def build_plan(benchmark_path, experiment_path, manifest, projects, experiment, 
     methods = experiment["design"]["methods"]
     cell_size = len(locations) * len(methods)
     runs = []
+    snapshot_hashes = {card["project_id"]: sha256(snapshot_path(benchmark_path, manifest, card)) for card in projects}
+    card_by_id = {card["project_id"]: card for card in projects}
 
     for project_index, card in enumerate(projects):
         for agent_index, (agent_entry, agent) in enumerate(zip(experiment["agents"], agents)):
@@ -294,6 +301,9 @@ def build_plan(benchmark_path, experiment_path, manifest, projects, experiment, 
                     runs.append(manipulated)
 
     for item in runs:
+        item["taxonomy_version"] = policy["taxonomy_version"]
+        item["policy_id"] = policy["policy_id"]
+        item.update(context_identity(card_by_id[item["project_id"]], policy, item["condition"], item["claim"], item["location"], item["method"], snapshot_hashes[item["project_id"]]))
         item["schedule_key"] = schedule_key(experiment["design"], item["run_id"])
     runs.sort(key=lambda item: item["schedule_key"])
     for schedule_order, item in enumerate(runs, start=1):
@@ -308,6 +318,8 @@ def build_plan(benchmark_path, experiment_path, manifest, projects, experiment, 
 
     return {
         "schema_version": "4.0",
+        "taxonomy_version": policy["taxonomy_version"],
+        "policy_id": policy["policy_id"],
         "experiment_id": experiment["experiment_id"],
         "design_type": experiment["design"]["type"],
         "benchmark_id": manifest["benchmark_id"],

@@ -5,12 +5,14 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from common import load_benchmark, load_json, sha256, snapshot_path
+from context_identity import context_identity
 from execution_contract import (
     RunLock,
     atomic_write_json,
@@ -28,12 +30,13 @@ from execution_contract import (
 )
 from materialize import materialize_one
 from opencode_trace import harvest as harvest_opencode_session
+from trace_validity import evaluate_trace
 
 
 ALLOWED_PLACEHOLDERS = {
     "{workspace}", "{prompt_file}", "{report}", "{trace}", "{artifact_dir}",
     "{model}", "{agent_config}", "{context_policy}", "{benchmark_manifest}",
-    "{run_id}"
+    "{run_id}", "{session_label}"
 }
 
 
@@ -44,6 +47,16 @@ def safe_remove(path, root):
         raise ValueError(f"refusing to remove path outside root: {path}")
     if path.exists():
         shutil.rmtree(path)
+
+
+def isolated_workspace_root(dataset_root):
+    """Keep the agent's cwd away from run IDs, the benchmark, and the outer Git repo."""
+    root = (Path(tempfile.gettempdir()).resolve() / "repo-audit-workspaces").resolve()
+    dataset_root = Path(dataset_root).resolve()
+    if root.is_relative_to(dataset_root) or dataset_root.is_relative_to(root):
+        raise ValueError("agent workspace root must be separate from the dataset")
+    root.mkdir(parents=True, exist_ok=True)
+    return root
 
 
 def set_nested_json_value(document, dotted_path, value):
@@ -212,7 +225,7 @@ def harvest_opencode_trace(runtime, values, materialization, card, artifact_dir,
         data_home = Path(runtime["xdg_data_home_template"].format(**values))
     try:
         session, events = harvest_opencode_session(
-            values["run_id"],
+            values["session_label"],
             repo_root=values["workspace"],
             carrier=(materialization.get("context") or {}).get("carrier"),
             ground_truth=(card.get("ground_truth") or {}) if card else None,
@@ -290,11 +303,15 @@ def prepare_workspace_config(agent_path, agent, runtime, workspace, artifact_dir
                 f"missing environment variable: {injection['environment_variable']}"
             )
         set_nested_json_value(config, injection["destination_json_path"], value)
+    artifact_config_name = runtime.get("artifact_config_file")
     workspace_config_name = runtime.get("workspace_config_file")
-    if not workspace_config_name:
-        raise ValueError("workspace_config_file is required when config_template is set")
-    workspace_config_path = workspace / workspace_config_name
-    workspace_config_path.write_text(
+    if bool(artifact_config_name) == bool(workspace_config_name):
+        raise ValueError("config_template requires exactly one config destination")
+    config_path = (
+        resolve_child(artifact_dir, artifact_config_name, "artifact_config_file")
+        if artifact_config_name else resolve_child(workspace, workspace_config_name, "workspace_config_file")
+    )
+    config_path.write_text(
         json.dumps(config, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
         newline="\n"
@@ -304,7 +321,7 @@ def prepare_workspace_config(agent_path, agent, runtime, workspace, artifact_dir
     for injection in agent.get("secret_injections", []):
         set_nested_json_value(redacted, injection["destination_json_path"], "<redacted>")
     return {
-        "workspace_config_path": workspace_config_path,
+        "config_path": config_path,
         "redacted_config": redacted
     }
 
@@ -353,7 +370,9 @@ def planned_context(run):
         "carrier": run.get("carrier"),
         "truthfulness": run.get("truthfulness"),
         "verifiability": run.get("verifiability"),
-        "context_variant_id": run.get("context_variant_id")
+        "context_variant_id": run.get("context_variant_id"),
+        "payload_sha256": run.get("payload_sha256"),
+        "snapshot_sha256": run.get("snapshot_sha256")
     }
 
 
@@ -444,12 +463,20 @@ def preflight_run(run, experiment_path, dataset_root, require_executable=False):
         resolve_child(artifact_dir, runtime[field], f"runtime {field}")
     if runtime.get("workspace_config_file"):
         resolve_child(workspace, runtime["workspace_config_file"], "workspace_config_file")
+    if runtime.get("artifact_config_file"):
+        resolve_child(artifact_dir, runtime["artifact_config_file"], "artifact_config_file")
+    if agent.get("config_template") and bool(runtime.get("workspace_config_file")) == bool(runtime.get("artifact_config_file")):
+        raise ValueError("config_template requires exactly one config destination")
+    if runtime.get("config_env") not in (None, "OPENCODE_CONFIG"):
+        raise ValueError("unsupported config_env")
+    if runtime.get("config_env") and not runtime.get("artifact_config_file"):
+        raise ValueError("config_env requires artifact_config_file")
     isolation_values = {
         "workspace": str(workspace),
         "artifact_dir": str(artifact_dir),
         "run_id": run["run_id"]
     }
-    for field in ("xdg_config_home_template", "xdg_data_home_template"):
+    for field in ("xdg_config_home_template", "xdg_data_home_template", "pi_config_dir_template"):
         template = runtime.get(field)
         if template:
             isolated_path = Path(template.format(**isolation_values)).resolve()
@@ -515,8 +542,9 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
     project = next(card for card in projects if card["project_id"] == run["project_id"])
     policy_path = (experiment_path.parent / experiment["context_policy"]).resolve()
     policy = load_json(policy_path)
-    workspace = preflight["workspace"]
-    workspace_root = preflight["workspace_root"]
+    planned_workspace = preflight["workspace"]
+    workspace_root = isolated_workspace_root(dataset_root)
+    workspace = workspace_root / attempt_id / "repository"
     artifact_dir = preflight["artifact_dir"]
     runs_root = preflight["runs_root"]
     raw_dir = artifact_dir / "raw"
@@ -532,6 +560,22 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
         if args.force or (args.resume and prior_status != "completed"):
             safe_remove(artifact_dir, runs_root)
         elif prior_status == "completed":
+            try:
+                previous = load_json(artifact_dir / "metadata.json")
+            except (OSError, ValueError):
+                return {"run_id": run["run_id"], "status": "error",
+                        "error": "completed artifact metadata is missing or invalid; use --force to rerun"}
+            previous_hashes = previous.get("hashes", {})
+            template_name = preflight["agent"].get("config_template")
+            template_path = preflight["agent_path"].parent / template_name if template_name else None
+            current_sources = {
+                "agent_config_source": sha256(preflight["agent_path"]),
+                "runtime_config_source": sha256(preflight["runtime_path"]),
+                "config_template_source": sha256(template_path) if template_path else None
+            }
+            if any(previous_hashes.get(name) != value for name, value in current_sources.items()):
+                return {"run_id": run["run_id"], "status": "error",
+                        "error": "completed artifact uses stale agent/runtime/template configuration; use --force to rerun"}
             return {
                 "run_id": run["run_id"],
                 "status": "skipped",
@@ -543,8 +587,8 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
                 "use --resume to rerun incomplete attempts or --force to rerun any attempt"
             )
 
-    if workspace.exists():
-        safe_remove(workspace, workspace_root)
+    if workspace.parent.exists():
+        raise FileExistsError(f"opaque attempt workspace already exists: {workspace.parent}")
     artifact_dir.mkdir(parents=True, exist_ok=False)
     raw_dir.mkdir(parents=True, exist_ok=True)
     started_at = utc_now()
@@ -571,10 +615,15 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
         project,
         run["condition"],
         workspace_root,
-        run["run_id"],
+        attempt_id,
         False,
         context_variant(run)
     )
+    if materialization["context"]["payload_sha256"] != run.get("payload_sha256"):
+        raise ValueError(f"payload hash mismatch for {run['run_id']}")
+    expected_identity = context_identity(project, policy, run["condition"], run.get("claim"), run.get("location"), run.get("method"), snapshot_sha256)
+    if any(run.get(field) != value for field, value in expected_identity.items()):
+        raise ValueError(f"context identity mismatch for {run['run_id']}")
     context_overlay_path = write_context_overlay(materialization, artifact_dir)
 
     prompt_path = artifact_dir / "prompt.txt"
@@ -591,23 +640,27 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
 
     report_path = artifact_dir / "report.md"
     trace_path = artifact_dir / "trace.json"
+    model_report_path = workspace.parent / "report.md"
     values = {
         "workspace": str(workspace.resolve()),
         "prompt_file": str(prompt_path.resolve()),
-        "report": str(report_path.resolve()),
+        "report": str(model_report_path.resolve()),
         "trace": str(trace_path.resolve()),
         "artifact_dir": str(artifact_dir.resolve()),
         "model": agent["model"],
         "agent_config": str(agent_snapshot_path.resolve()),
         "context_policy": str(policy_path.resolve()),
         "benchmark_manifest": str(benchmark_path.resolve()),
-        "run_id": run["run_id"]
+        "run_id": run["run_id"],
+        "session_label": "audit-" + attempt_id.replace("-", "")
     }
     arguments = render_arguments(runtime["arguments"], values)
     program = preflight["program"]
     command = [program, *arguments]
     cwd = workspace if runtime["cwd"] == "{workspace}" else artifact_dir
     environment = build_environment(agent, runtime)
+    if runtime.get("config_env") and config_info:
+        environment[runtime["config_env"]] = str(config_info["config_path"].resolve())
     # per-run opencode XDG dirs: isolate config/data so concurrent opencode runs
     # never share/lock the same SQLite db (trace_source = opencode_db).
     xdg_config_template = runtime.get("xdg_config_home_template")
@@ -620,6 +673,12 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
         xdg_data = xdg_data_template.format(**values)
         Path(xdg_data).mkdir(parents=True, exist_ok=True)
         environment["XDG_DATA_HOME"] = xdg_data
+
+    pi_config_template = runtime.get("pi_config_dir_template")
+    if pi_config_template:
+        pi_config_dir = pi_config_template.format(**values)
+        Path(pi_config_dir).mkdir(parents=True, exist_ok=True)
+        environment["PI_CODING_AGENT_DIR"] = pi_config_dir
 
     workspace_exclusions = []
     if runtime.get("workspace_config_file"):
@@ -670,8 +729,12 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
 
     if runtime["report_source"] == "stdout":
         report_path.write_text(stdout, encoding="utf-8", newline="\n")
-    elif runtime["report_source"] == "output_last_message" and not report_path.exists():
-        report_path.write_text(stdout, encoding="utf-8", newline="\n")
+    elif runtime["report_source"] == "output_last_message":
+        report_path.write_text(
+            model_report_path.read_text(encoding="utf-8", errors="replace")
+            if model_report_path.is_file() else stdout,
+            encoding="utf-8", newline="\n"
+        )
     elif runtime["report_source"] == "jsonl_last_message":
         if stdout_lines is None:
             stdout_lines = read_stdout_jsonl_events(stdout_path)
@@ -704,6 +767,7 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
         "audit_task": sha256(audit_task_path),
         "agent_config_source": sha256(agent_path),
         "runtime_config_source": sha256(runtime_path),
+        "config_template_source": sha256(agent_path.parent / agent["config_template"]) if agent.get("config_template") else None,
         "execution_policy": sha256(preflight["execution_policy_path"]),
         "context_policy": sha256(policy_path),
         "benchmark_manifest": sha256(benchmark_path),
@@ -719,6 +783,8 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
         "run_id": run["run_id"],
         "attempt_id": attempt_id,
         "experiment_id": experiment["experiment_id"],
+        "taxonomy_version": run["taxonomy_version"],
+        "policy_id": run["policy_id"],
         "project_id": run["project_id"],
         "repository": run["repository"],
         "cve": run["cve"],
@@ -739,6 +805,7 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
         "finished_at": utc_now(),
         "duration_s": round(time.monotonic() - started_clock, 6),
         "workspace": str(workspace),
+        "planned_workspace": str(planned_workspace),
         "artifact_dir": str(artifact_dir),
         "command": redacted_command,
         "environment_variable_names": sorted(environment),
@@ -755,9 +822,18 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
     }
     metadata_path = artifact_dir / "metadata.json"
     atomic_write_json(metadata_path, metadata)
+    validity = evaluate_trace(
+        trace_path, agent["scaffold"], workspace,
+        carrier=materialization["context"].get("carrier"),
+        payload_text=materialization.get("payload_text"),
+        dataset_root=dataset_root,
+    )
+    atomic_write_json(artifact_dir / "validity.json", validity)
+    metadata["validity"] = validity
     artifact_errors = validate_completed_artifacts(
         artifact_dir, runtime, verdict, execution_policy
     )
+    artifact_errors.extend(validity["errors"])
     if workspace_sha256_before != workspace_sha256_after:
         artifact_errors.append("workspace changed during the agent audit")
     status = (
@@ -783,6 +859,7 @@ def execute_run_locked(run, experiment_path, dataset_root, args, preflight, atte
         "run_definition_sha256": input_hashes["run_definition"],
         "metadata_sha256": sha256(metadata_path)
     })
+    safe_remove(workspace.parent, workspace_root)
     return {
         "run_id": run["run_id"],
         "status": status,
@@ -804,7 +881,8 @@ def execute_run(run, experiment_path, dataset_root, args):
             "run_id": run["run_id"],
             "status": "dry-run",
             "context": planned_context(run),
-            "workspace": str(preflight["workspace"]),
+            "planned_workspace": str(preflight["workspace"]),
+            "execution_workspace_root": str(isolated_workspace_root(dataset_root)),
             "artifact_dir": str(preflight["artifact_dir"]),
             "execution_policy": str(preflight["execution_policy_path"])
         }
@@ -888,6 +966,8 @@ def main():
         raise SystemExit("run plan benchmark_manifest does not match experiment")
     if plan.get("context_policy") != experiment.get("context_policy"):
         raise SystemExit("run plan context_policy does not match experiment")
+    if plan.get("taxonomy_version") != experiment.get("taxonomy_version"):
+        raise SystemExit("run plan taxonomy_version does not match experiment")
     run_ids = [run.get("run_id") for run in plan.get("runs", [])]
     if len(run_ids) != len(set(run_ids)):
         raise SystemExit("run plan contains duplicate run IDs")
@@ -936,7 +1016,8 @@ def main():
                     "run_id": run["run_id"],
                     "status": "ready",
                     "program": checked["program"],
-                    "workspace": str(checked["workspace"]),
+                    "planned_workspace": str(checked["workspace"]),
+                    "execution_workspace_root": str(isolated_workspace_root(dataset_root)),
                     "artifact_dir": str(checked["artifact_dir"]),
                     "required_environment": checked["required_environment"]
                 }

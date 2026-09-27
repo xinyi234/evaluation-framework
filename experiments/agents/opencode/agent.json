@@ -1,10 +1,11 @@
 {
   "schema_version": "1.0",
-  "agent_id": "codex-cli-v1",
-  "scaffold": "codex-cli",
-  "model": "deepseek-v4-pro",
+  "agent_id": "opencode",
+  "scaffold": "opencode",
+  "model": "deepseek/deepseek-v4-pro",
   "runtime_file": "runtime.json",
-  "timeout_s": 1800,
+  "config_template": "opencode.template.json",
+  "timeout_s": 3600,
   "artifact_policy": {
     "prompt_snapshot": "prompt.txt",
     "redacted_agent_config_snapshot": "agent_config.json",
